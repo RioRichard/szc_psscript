@@ -22,7 +22,7 @@ $CommonApps = @(
     Name = "Microsoft Office"
     Package = ""
     PackageManager = "winget"
-    Custom = "$PSScriptRoot/OfficeCustom.xml"
+    Custom = "$PSScriptRoot\OfficeCustom.xml"
   },
   @{
     Name = "Chrome"

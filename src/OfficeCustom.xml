@@ -1,14 +1,12 @@
-<Configuration>
-  <Add OfficeClientEdition="64" Channel="Current">
-    <Product ID="O365BusinessRetail">
-      <Language ID="en-us" />
-      <!-- Exclude apps you do not need -->
-      <ExcludeApp ID="Groove" />
-      <ExcludeApp ID="Lync" />
-      <ExcludeApp ID="Bing" />
+<Configuration >
+  <Add>
+    <Product ID="O365BusinessEEANoTeamsRetail">
+      <Language ID="MatchOS"/>
+      <Language ID="MatchPreviousMSI"/>
+      <ExcludeApp ID="Groove"/>
+      <ExcludeApp ID="Lync"/>
     </Product>
   </Add>
-  <Updates Enabled="TRUE" />
-  <RemoveMSI />
-  <Display Level="Full" AcceptEULA="TRUE" />
+  <RemoveMSI/>
+  <Display Level="None" AcceptEULA="TRUE"/>
 </Configuration>
