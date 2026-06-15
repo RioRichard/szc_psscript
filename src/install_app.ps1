@@ -10,12 +10,14 @@ function Install-App
   try
   {
     
-    $Command = @("install" ,"$PackageName ","--accept-package-agreements ","--accept-source-agreements ","-h ")
+    $Command = @("install","-e","--id","$PackageName ","--accept-package-agreements ","--accept-source-agreements ","-h ")
     if ([String]::IsNullOrWhiteSpace($Custom))
     {
       $Command += "--custom /configure $Custom"
     }
-    winget @Command
+
+    Write-Host "winget $Command"
+    winget $Command
   } catch
   {
     Write-Error "Error when install: $Name"
