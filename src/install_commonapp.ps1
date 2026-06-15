@@ -36,6 +36,6 @@ function Install-CommonApps
 {
   foreach ($App in $CommonApps)
   {
-    Install-App -Name $App.Name -Package $App.Package -PackageManager $App.PackageManager
+    Install-App -Name $App.Name -PackageName $App.Package -PackageManager $App.PackageManager
   }
 }
