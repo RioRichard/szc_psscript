@@ -1,4 +1,4 @@
-. "$PSScriptRoot/src/install_printer.ps1"
+. "$PSScriptRoot/install_printer.ps1"
 $Printers = @(
   @{
     Name = "HP 4003 DN"
