@@ -1,6 +1,7 @@
 
-function Install-LocalPrinter{
-  [CmdletBinding(SupportShouldProcess)]
+function Install-LocalPrinter
+{
+  [CmdletBinding(SupportsShouldProcess)]
   param (
     [Parameter(Mandatory)]
     [string] $Name,
@@ -11,36 +12,45 @@ function Install-LocalPrinter{
     [string] $Port,
 
     [string] $Driver,
+    [string] $DriverUrl
   )
 
-  try {
+  try
+  {
     $ExistingPrinterByName = Get-Printer -Name $Name -ErrorAction SilentlyContinue
 
-    if ($ExistingPrinterByName) {
+    if ($ExistingPrinterByName)
+    {
       Write-Host "Printer already exist: $Name"
       return
     }
 
 
-    if ($PSCmdlet.ShouldProcess($Name, "Installing Printer $Name at $Url")) {
-      if (!$Port -and !$Driver) {
+    if ($PSCmdlet.ShouldProcess($Name, "Installing Printer $Name at $Url"))
+    {
+      if (!$Port -and !$Driver)
+      {
         Add-Printer -Name $Name -DeviceUrl $Url -ErrorAction Stop
-      }else {
-      #   if ($Port){
-      #     $ExistingPort = Get-PrinterPort -Name "IP_$Name" -ErrorAction SilentlyContinue
-      #     if (!$ExistingPort){
-      #
-      #     }
-      #   }
-      #
-      # }
-      Write-Warning "Add Port and Driver"
+      } else
+      {
+        #   if ($Port){
+        #     $ExistingPort = Get-PrinterPort -Name "IP_$Name" -ErrorAction SilentlyContinue
+        #     if (!$ExistingPort){
+        #
+        #     }
+        #   }
+        #
+        # }
+        Write-Warning "Add Port and Driver"
+      }
     }
-  }
-  catch {
-      Write-Error "Error when install $Name"
-      Write-Error "Reason: ${$_.Exception.Message}"
-  }
   
-    
+  } catch
+  {
+    Write-Error "Error when install $Name"
+    Write-Error "Reason: ${$_.Exception.Message}"
+  } finally
+  {
+    Write-Host "Finally"
+  }
 }
