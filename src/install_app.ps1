@@ -4,11 +4,19 @@ function Install-App
   param (
     [String]$Name,
     [String]$PackageName,
-    [String]$PackageManager
+    [String]$PackageManager,
+    [String]$Custom
   )
   try
   {
-    winget install $PackageName --accept-package-agreements --accept-source-agreements -h
+    $Command = " winget install -e --id $PackageName --accept-package-agreements --accept-source-agreements -h"
+    if ($Custom)
+    {
+      $Command += "--custom /configure $Custom"
+    }
+
+    Start-Process powershell -Verb runAs -ArgumentList "-NoExit", "-NoProfile", "-Command", "$Command"
+    
   } catch
   {
     Write-Error "Error when install: $Name"

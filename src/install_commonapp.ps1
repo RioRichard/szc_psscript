@@ -4,31 +4,43 @@ $CommonApps = @(
     Name = "Unikey"
     Package = "unikey.unikey"
     PackageManager = "winget"
+    Custom = ""
   },
   @{
     Name = "Viber"
-    Package = "Rakurten.Viber"
+    Package = "Rakuten.Viber"
     PackageManager = "winget"
+    Custom = ""
   },
   @{
     Name = "Zalo"
     Package = "VNGCorp.Zalo"
     PackageManager = "winget"
+    Custom = ""
+  },
+  @{
+    Name = "Microsoft Office"
+    Package = ""
+    PackageManager = "winget"
+    Custom = "$PSScriptRoot/OfficeCustom.xml"
   },
   @{
     Name = "Chrome"
-    Package = "Chrome"
+    Package = "Google.Chrome"
     PackageManager = "winget"
+    Custom = ""
   },
   @{
     Name = "VCRedist (x64)"
     Package = "Microsoft.VCRedist.2015+.x64"
     PackageManager = "winget"
+    Custom = ""
   },
   @{
     Name = "VCRedist (x86)"
     Package = "Microsoft.VCRedist.2015+.x86"
     PackageManager = "winget"
+    Custom = ""
   }
 )
 
@@ -36,6 +48,6 @@ function Install-CommonApps
 {
   foreach ($App in $CommonApps)
   {
-    Install-App -Name $App.Name -PackageName $App.Package -PackageManager $App.PackageManager
+    Install-App -Name $App.Name -PackageName $App.Package -PackageManager $App.PackageManager -Custom $App.Custom
   }
 }
