@@ -21,10 +21,14 @@ function Install-App
       }
       $Command = @("install","-m " ,"$Custom")
     }
-    $Temp | Set-Content $OfficeCustomxml
 
     Write-Host "winget $Command"
     winget $Command
+
+    if ($Temp)
+    {
+      $Temp | Set-Content $OfficeCustomxml
+    }
   } catch
   {
     Write-Error "Error when install: $Name"
