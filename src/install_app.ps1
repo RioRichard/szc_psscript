@@ -11,7 +11,7 @@ function Install-App
   {
     
     $Command = @("install","-e","--id","$PackageName ","--accept-package-agreements ","--accept-source-agreements ","-h ")
-    if ([String]::IsNullOrWhiteSpace($Custom))
+    if (![String]::IsNullOrWhiteSpace($Custom))
     {
       $Command += "--custom /configure $Custom"
     }
