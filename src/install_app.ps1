@@ -8,7 +8,7 @@ function Install-App
   )
   try
   {
-    winget install $PackageName
+    winget install $PackageName --accept-package-agreements --accept-source-agreements -h
   } catch
   {
     Write-Error "Error when install: $Name"
