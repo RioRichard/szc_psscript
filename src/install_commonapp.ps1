@@ -1,4 +1,4 @@
-. "$PSScriptRoot/install_app.ps1"
+. "$PSScriptRoot\src\install_app.ps1"
 $CommonApps = @(
   @{
     Name = "Unikey"
