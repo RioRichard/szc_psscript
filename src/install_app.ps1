@@ -9,12 +9,19 @@ function Install-App
   )
   try
   {
-    
+    $Temp = ""
+    $OfficeCustomxml = "$PSScriptRoot/OfficeCustom.xml"
     $Command = @("install","-e","--id","$PackageName","--accept-package-agreements","--accept-source-agreements","-h")
     if (![String]::IsNullOrWhiteSpace($Custom))
     {
-      $Command = "install -m $Custom"
+      if ($PackageName -eq 'Microsoft.Office')
+      {
+        $Temp = (Get-Content $OfficeCustomxml)
+        (Get-Content $OfficeCustomxml) -replace 'OfficeCustom.xml', "$PSScriptRoot/OfficeCustom.xml" | Set-Content $OfficeCustomxml
+      }
+      $Command = @("install","-m " ,"$Custom")
     }
+    $Temp | Set-Content $OfficeCustomxml
 
     Write-Host "winget $Command"
     winget $Command

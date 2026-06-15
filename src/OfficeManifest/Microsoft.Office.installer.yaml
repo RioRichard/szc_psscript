@@ -9,8 +9,8 @@ InstallModes:
 - silent
 - silentWithProgress
 InstallerSwitches:
-  Silent: /configure ../OfficeCustom.xml
-  SilentWithProgress: /configure ../OfficeCustom.xml
+  Silent: /configure OfficeCustom.xml
+  SilentWithProgress: /configure OfficeCustom.xml
 UpgradeBehavior: install
 ReleaseDate: 2026-06-10
 ElevationRequirement: elevationRequired
