@@ -9,14 +9,13 @@ function Install-App
   )
   try
   {
-    $Command = " winget install -e --id $PackageName --accept-package-agreements --accept-source-agreements -h"
-    if ($Custom)
+    
+    $Command = @("install", "-e","--id ","$PackageName ","--accept-package-agreements ","--accept-source-agreements ","-h ")
+    if ([String]::IsNullOrWhiteSpace($Custom))
     {
       $Command += "--custom /configure $Custom"
     }
-
-    Start-Process powershell -Verb runAs -ArgumentList "-NoExit", "-NoProfile", "-Command", "$Command"
-    
+    winget @Command
   } catch
   {
     Write-Error "Error when install: $Name"
