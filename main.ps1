@@ -1,6 +1,6 @@
-. "$PSScriptRoot/printers_dn.ps1"
-. "$PSScriptRoot/install_commonapp.ps1"
+. "$PSScriptRoot/src/printers_dn.ps1"
+. "$PSScriptRoot/src/install_commonapp.ps1"
 
 
 # Install-BHCommonPrinters
-Install-CommonApps
+Install-CommonApp
