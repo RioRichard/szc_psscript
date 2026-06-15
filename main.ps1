@@ -3,4 +3,4 @@
 
 
 # Install-BHCommonPrinters
-Install-CommonApp
+Install-CommonApps
