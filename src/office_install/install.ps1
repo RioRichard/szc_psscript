@@ -1,6 +1,6 @@
 
 
-$Url = https://go.microsoft.com/fwlink/?linkid=2264705&clcid=0x409&culture=en-us&country=us
+$Url = "https://go.microsoft.com/fwlink/?linkid=2264705&clcid=0x409&culture=en-us&country=us"
 $CacheDir = "C:\ProgramData\SZC\InstallCache"
 
 New-Item `
