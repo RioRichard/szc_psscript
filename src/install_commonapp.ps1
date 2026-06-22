@@ -21,8 +21,8 @@ $CommonApps = @(
   @{
     Name = "Microsoft Office"
     Package = ""
-    PackageManager = ""
-    Custom = @("powershell","-ExecutionPolicy","ByPass","$PSScriptRoot/office_install/install.ps1")
+    PackageManager = "powershell"
+    Custom = @("-ExecutionPolicy","ByPass","$PSScriptRoot/office_install/install.ps1")
   },
   @{
     Name = "Microsoft OneDrive"

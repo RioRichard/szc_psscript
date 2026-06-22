@@ -9,13 +9,13 @@ function Install-App
   )
   try
   {
-    $Command = @("winget","install","--e","--id","$PackageName","--accept-package-agreements","--accept-source-agreements","-h")
+    $Command = @("install","--e","--id","$PackageName","--accept-package-agreements","--accept-source-agreements","-h")
     if (![String]::IsNullOrWhiteSpace($Custom))
     {
       $Command = $Custom
     }
 
-    & $Command
+    & $PackageManager $Command
 
     if ($Temp)
     {
