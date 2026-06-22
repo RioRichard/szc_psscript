@@ -9,7 +9,7 @@ function Install-App
   )
   try
   {
-    $Command = @("install","--e","--id","$PackageName","--accept-package-agreements","--accept-source-agreements","-h")
+    $Command = @("install","-e","--id","$PackageName","--accept-package-agreements","--accept-source-agreements","-h")
     if (![String]::IsNullOrWhiteSpace($Custom))
     {
       $Command = $Custom
