@@ -2,7 +2,7 @@
 $CommonApps = @(
   @{
     Name = "Unikey"
-    Package = "unikey.unikey"
+    Package = "Unikey.Unikey"
     PackageManager = "winget"
     Custom = ""
   },
@@ -20,13 +20,25 @@ $CommonApps = @(
   },
   @{
     Name = "Microsoft Office"
-    Package = "Microsoft.Office"
-    PackageManager = "winget"
+    Package = ""
+    PackageManager = ""
     Custom = @("powershell","-ExecutionPolicy","ByPass","$PSScriptRoot/office_install/install.ps1")
+  },
+  @{
+    Name = "Microsoft OneDrive"
+    Package = "Microsoft.OneDrive"
+    PackageManager = "winget"
+    Custom = ""
   },
   @{
     Name = "Chrome"
     Package = "Google.Chrome"
+    PackageManager = "winget"
+    Custom = ""
+  },
+  @{
+    Name = "7 Zip"
+    Package = "7zip.7zip"
     PackageManager = "winget"
     Custom = ""
   },
