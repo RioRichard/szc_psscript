@@ -22,7 +22,7 @@ $CommonApps = @(
     Name = "Microsoft Office"
     Package = "Microsoft.Office"
     PackageManager = "winget"
-    Custom = "$PSScriptRoot/OfficeManifest"
+    Custom = @("powershell","-ExecutionPolicy","ByPass","$PSScriptRoot/office_install/install.ps1")
   },
   @{
     Name = "Chrome"
