@@ -5,7 +5,7 @@ function Install-App
     [String]$Name,
     [String]$PackageName,
     [String]$PackageManager,
-    [String]$Custom
+    $Custom
   )
   try
   {
