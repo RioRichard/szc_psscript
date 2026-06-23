@@ -25,6 +25,12 @@ $CommonApps = @(
     Custom = @("-ExecutionPolicy","ByPass","$PSScriptRoot/office_install/install.ps1")
   },
   @{
+    Name = "Kaspersky Endpoint Security 14.0"
+    Package = ""
+    PackageManager = "powershell"
+    Custom = @("-ExecutionPolicy","ByPass","$PSScriptRoot/kes_install/install.ps1")
+  },
+  @{
     Name = "Microsoft OneDrive"
     Package = "Microsoft.OneDrive"
     PackageManager = "winget"
