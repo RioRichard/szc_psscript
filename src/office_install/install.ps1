@@ -9,6 +9,8 @@ New-Item `
   -Path $CacheDir | Out-Null
 
 $Installer = Join-Path $CacheDir "OfficeSetup.exe"
+$OfficeXML = "$PSScriptRoot/OfficeCustom.xml"
+Write-Output $OfficeXML
 
 Invoke-WebRequest `
   -Uri $Url `
@@ -16,10 +18,9 @@ Invoke-WebRequest `
 
 $Proc = Start-Process `
   -FilePath $Installer `
-  -ArgumentList @("/quiet","/configure","$PSScriptRoot/OfficeCustom.xml") `
+  -ArgumentList @("/configure",$OfficeXML) `
   -PassThru `
   -Wait
 
 Write-Output $Proc.ExitCode
-
 Remove-Item $Installer -Force
