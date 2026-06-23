@@ -1,8 +1,8 @@
 . "$PSScriptRoot\install_app.ps1"
 $CommonApps = @(
   @{
-    Name = "Unikey"
-    Package = "Unikey.Unikey"
+    Name = "UniKey"
+    Package = "UniKey.UniKey"
     PackageManager = "winget"
     Custom = ""
   },
@@ -27,6 +27,12 @@ $CommonApps = @(
   @{
     Name = "Microsoft OneDrive"
     Package = "Microsoft.OneDrive"
+    PackageManager = "winget"
+    Custom = ""
+  },
+  @{
+    Name = "Ultra Viewer"
+    Package = "DucFabulous.UltraViewer"
     PackageManager = "winget"
     Custom = ""
   },
