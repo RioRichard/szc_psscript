@@ -14,9 +14,12 @@ Invoke-WebRequest `
   -Uri $Url `
   -OutFile $Installer
 
-Start-Process `
+$Proc = Start-Process `
   -FilePath $Installer `
   -ArgumentList @("/quiet","/configure","$PSScriptRoot/OfficeCustom.xml") `
+  -PassThru `
   -Wait
+
+Write-Output $Proc.ExitCode
 
 Remove-Item $Installer -Force

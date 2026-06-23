@@ -1,12 +1,11 @@
 <Configuration >
   <Add>
-    <Product ID="O365BusinessEEANoTeamsRetail">
-      <Language ID="MatchOS"/>
-      <Language ID="MatchPreviousMSI"/>
-      <ExcludeApp ID="Groove"/>
-      <ExcludeApp ID="Lync"/>
+    <Product ID="O365BusinessRetail">
+      <Language ID="en-us"/>
+      <Language ID="vi-vn"/>
+      <ExcludeApp ID="Teams"/>
     </Product>
   </Add>
   <RemoveMSI/>
-  <Display Level="None" AcceptEULA="TRUE"/>
+  <Display Level="True" AcceptEULA="TRUE"/>
 </Configuration>
