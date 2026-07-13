@@ -1,0 +1,25 @@
+[
+  {
+    "id": "hp4003",
+    "name": "HP 4003 DN",
+    "url": "192.168.3.21"
+  },
+  {
+    "id": "brother_t4500",
+    "name": "Brother T4500DW BH",
+    "url": "192.168.3.20"
+  },
+  {
+    "id": "ricoh_mp3555",
+    "name": "Ricoh MP 3555 BH (Photocopy)",
+    "url": "192.168.3.23"
+  },
+  {
+    "id": "epson_l1800",
+    "name": "EPSON L1800 BH",
+    "url": "192.168.3.21",
+    "port": "L1800",
+    "driver": "Epson L1800",
+    "urlDriver": "https://ftp.hp.com/pub/softlib/software13/printers/LJ4001-4004/V4_DriveronlyWebpack-54.5.5370-LJ4001-4004_V4_DriveronlyWebpack.exe"
+  }
+]

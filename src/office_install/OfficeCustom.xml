@@ -7,5 +7,5 @@
     </Product>
   </Add>
   <RemoveMSI/>
-  <Display Level="True" AcceptEULA="TRUE"/>
+  <Display Level="Full" AcceptEULA="TRUE"/>
 </Configuration>

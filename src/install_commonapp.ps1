@@ -1,72 +1,24 @@
 . "$PSScriptRoot\install_app.ps1"
-$CommonApps = @(
-  @{
-    Name = "UniKey"
-    Package = "UniKey.UniKey"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "Viber"
-    Package = "Rakuten.Viber"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "Zalo"
-    Package = "VNGCorp.Zalo"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "Microsoft Office"
-    Package = ""
-    PackageManager = "powershell"
-    Custom = @("-ExecutionPolicy","ByPass","$PSScriptRoot/office_install/install.ps1")
-  },
-  @{
-    Name = "Kaspersky Endpoint Security 14.0"
-    Package = ""
-    PackageManager = "powershell"
-    Custom = @("-ExecutionPolicy","ByPass","$PSScriptRoot/kes_install/install.ps1")
-  },
-  @{
-    Name = "Microsoft OneDrive"
-    Package = "Microsoft.OneDrive"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "Ultra Viewer"
-    Package = "DucFabulous.UltraViewer"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "Chrome"
-    Package = "Google.Chrome"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "7 Zip"
-    Package = "7zip.7zip"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "VCRedist (x64)"
-    Package = "Microsoft.VCRedist.2015+.x64"
-    PackageManager = "winget"
-    Custom = ""
-  },
-  @{
-    Name = "VCRedist (x86)"
-    Package = "Microsoft.VCRedist.2015+.x86"
-    PackageManager = "winget"
-    Custom = ""
+
+# Load app definitions from config.json
+$_config = Get-Content "$PSScriptRoot\config.json" -Raw | ConvertFrom-Json
+
+$CommonApps = foreach ($app in $_config.apps) {
+  # Expand customScript relative path into a full powershell argument array at load time
+  $custom = ""
+  if ($app.customScript) {
+    $scriptPath = Join-Path $PSScriptRoot $app.customScript
+    $custom = @("-ExecutionPolicy", "ByPass", $scriptPath)
   }
-)
+
+  @{
+    Id             = $app.id
+    Name           = $app.name
+    Package        = $app.package
+    PackageManager = $app.packageManager
+    Custom         = $custom
+  }
+}
 
 function Install-CommonApps
 {

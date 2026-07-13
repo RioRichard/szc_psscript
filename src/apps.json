@@ -1,0 +1,70 @@
+[
+  {
+    "id": "unikey",
+    "name": "UniKey",
+    "package": "UniKey.UniKey",
+    "packageManager": "winget"
+  },
+  {
+    "id": "viber",
+    "name": "Viber",
+    "package": "Rakuten.Viber",
+    "packageManager": "winget"
+  },
+  {
+    "id": "zalo",
+    "name": "Zalo",
+    "package": "VNGCorp.Zalo",
+    "packageManager": "winget"
+  },
+  {
+    "id": "office",
+    "name": "Microsoft Office",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "office_install/install.ps1"
+  },
+  {
+    "id": "kes",
+    "name": "Kaspersky Endpoint Security",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "kes_install/install.ps1"
+  },
+  {
+    "id": "onedrive",
+    "name": "Microsoft OneDrive",
+    "package": "Microsoft.OneDrive",
+    "packageManager": "winget"
+  },
+  {
+    "id": "ultraviewer",
+    "name": "Ultra Viewer",
+    "package": "DucFabulous.UltraViewer",
+    "packageManager": "winget"
+  },
+  {
+    "id": "chrome",
+    "name": "Chrome",
+    "package": "Google.Chrome",
+    "packageManager": "winget"
+  },
+  {
+    "id": "7zip",
+    "name": "7 Zip",
+    "package": "7zip.7zip",
+    "packageManager": "winget"
+  },
+  {
+    "id": "vcredist_x64",
+    "name": "VCRedist (x64)",
+    "package": "Microsoft.VCRedist.2015+.x64",
+    "packageManager": "winget"
+  },
+  {
+    "id": "vcredist_x86",
+    "name": "VCRedist (x86)",
+    "package": "Microsoft.VCRedist.2015+.x86",
+    "packageManager": "winget"
+  }
+]
