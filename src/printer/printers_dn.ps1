@@ -1,9 +1,10 @@
 . "$PSScriptRoot/install_printer.ps1"
 
-# Load printer definitions from config.json
-$_config = Get-Content "$PSScriptRoot\config.json" -Raw | ConvertFrom-Json
+# Load printer definitions from config/printers.json
+$printersJsonPath = Join-Path $PSScriptRoot "../config/printers.json"
+$_printers = Get-Content $printersJsonPath -Raw | ConvertFrom-Json
 
-$Printers = foreach ($printer in $_config.printers) {
+$Printers = foreach ($printer in $_printers) {
   @{
     Id        = $printer.id
     Name      = $printer.name

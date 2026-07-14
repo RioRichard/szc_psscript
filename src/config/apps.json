@@ -22,14 +22,14 @@
     "name": "Microsoft Office",
     "package": "",
     "packageManager": "powershell",
-    "customScript": "office_install/install.ps1"
+    "customScript": "app/office_install/install.ps1"
   },
   {
     "id": "kes",
     "name": "Kaspersky Endpoint Security",
     "package": "",
     "packageManager": "powershell",
-    "customScript": "kes_install/install.ps1"
+    "customScript": "app/kes_install/install.ps1"
   },
   {
     "id": "onedrive",
