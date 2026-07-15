@@ -95,41 +95,50 @@ function Show-DepartmentMenu
   {
     Clear-Host
     Write-Header "SELECT USER DEPARTMENT PROFILE"
-    
+    Write-Host ""
+
     for ($i = 0; $i -lt $script:Departments.Count; $i++)
     {
       $dept = $script:Departments[$i]
-      $num = $i + 1
-      Write-Host "  [$num] $($dept.name)"
+      $num = ($i + 1).ToString().PadLeft(2)
+      Write-Host "  $num. $($dept.name)"
     }
-    Write-Host "  [C] Custom (Manual Selection)"
-    Write-Host "  [Q] Return to Main Menu"
+
+    $customNum = $script:Departments.Count + 1
+    $backNum   = $script:Departments.Count + 2
+    Write-Host "  $($customNum.ToString().PadLeft(2)). Custom (Manual Selection)"
     Write-Divider
-    Write-Host "Selecting a profile presets apps & printers." -ForegroundColor Yellow
+    Write-Host "  $($backNum.ToString().PadLeft(2)). Return to Main Menu"
+    Write-Host ""
+    Write-Host "  Selecting a profile presets apps & printers." -ForegroundColor Yellow
     Write-Footer
-    
-    $actionInput = (Read-Host "Choose profile").Trim().ToUpper()
-    
-    if ($actionInput -eq "Q")
+
+    $actionInput = (Read-Host "Choose (1-$backNum)").Trim()
+    $val = 0
+
+    if ([int]::TryParse($actionInput, [ref]$val))
     {
-      return
-    } elseif ($actionInput -eq "C")
-    {
-      $script:currentDepartmentName = "Custom"
-      return
-    } else
-    {
-      $val = 0
-      if ([int]::TryParse($actionInput, [ref]$val) -and $val -ge 1 -and $val -le $script:Departments.Count)
+      if ($val -ge 1 -and $val -le $script:Departments.Count)
       {
         $dept = $script:Departments[$val - 1]
         Apply-DepartmentProfile $dept
+        return
+      } elseif ($val -eq $customNum)
+      {
+        $script:currentDepartmentName = "Custom"
+        return
+      } elseif ($val -eq $backNum)
+      {
         return
       } else
       {
         Write-Host "Invalid option, press Enter to try again..." -ForegroundColor Red
         Read-Host | Out-Null
       }
+    } else
+    {
+      Write-Host "Please enter a number only. Press Enter to try again..." -ForegroundColor Red
+      Read-Host | Out-Null
     }
   }
 }
@@ -239,12 +248,13 @@ function Show-MainMenu
     $printerCount = ($script:selectedPrinters.Values | Where-Object { $_ }).Count
     Write-Host " Selected: $appCount/$($CommonApps.Count) Apps, $printerCount/$($Printers.Count) Printers"
     Write-Footer
-    Write-Host " [1] Select User Department Profile"
-    Write-Host " [2] Customize Selected Applications"
-    Write-Host " [3] Customize Selected Printers"
-    Write-Host " [4] Collect User & System Information"
-    Write-Host " [5] Start Deployment"
-    Write-Host " [6] Exit"
+    Write-Host "  1. Select User Department Profile"
+    Write-Host "  2. Customize Selected Applications"
+    Write-Host "  3. Customize Selected Printers  " -NoNewline
+    Write-Host "(Coming Soon)" -ForegroundColor DarkGray
+    Write-Host "  4. Collect User & System Information"
+    Write-Host "  5. Start Deployment"
+    Write-Host "  6. Exit"
     Write-Footer
     Write-Host ""
     

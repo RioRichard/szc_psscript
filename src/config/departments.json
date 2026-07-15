@@ -9,6 +9,7 @@
       "chrome",
       "onedrive",
       "unikey",
+      "7zip",
       "kes"
     ],
     "printers": [
@@ -26,6 +27,7 @@
       "chrome",
       "onedrive",
       "unikey",
+      "7zip",
       "kes",
       "vcredist_x64",
       "vcredist_x86"
@@ -45,8 +47,8 @@
       "chrome",
       "onedrive",
       "unikey",
-      "kes",
       "7zip",
+      "kes",
       "ultraviewer"
     ],
     "printers": [
@@ -64,6 +66,7 @@
       "chrome",
       "onedrive",
       "unikey",
+      "7zip",
       "kes"
     ],
     "printers": [
@@ -78,11 +81,11 @@
       "viber",
       "zalo",
       "office",
+      "7zip",
       "kes",
       "onedrive",
       "ultraviewer",
       "chrome",
-      "7zip",
       "vcredist_x64",
       "vcredist_x86"
     ],

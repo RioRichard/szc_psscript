@@ -2,6 +2,8 @@
 
 This repository contains PowerShell scripts designed to automate the installation of common applications and network printers in the SZC office environment.
 
+> **Agent Rule:** Always update this file at the end of every session to reflect the current state of the codebase, known issues, and deferred tasks.
+
 ---
 
 ## 🚀 How to Run
@@ -21,7 +23,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 *   `src/`: Core script directory:
     *   `tui/`: Directory containing the split Text User Interface:
         *   `tui.ps1`: The TUI coordinator entrypoint.
-        *   `components/utils.ps1`: Shared UI components (headers, dividers).
+        *   `components/utils.ps1`: Shared UI components (headers, dividers, press-enter prompt).
         *   `app/app_ui.ps1`: Application selection interface.
         *   `printer/printer_ui.ps1`: Printer selection interface.
         *   `information/info_ui.ps1`: System information collection interface.
@@ -31,7 +33,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `departments.json`: Department profiles — each references apps and printers by `id`.
     *   `app/`: Directory containing application installation logic:
         *   `install_app.ps1`: Generic helper function (`Install-App`) to install applications via `winget` or custom setup scripts.
-        *   `install_commonapp.ps1`: Defines the array of applications to install (`$CommonApps`) and iterates through them.
+        *   `install_commonapp.ps1`: Loads `apps.json` and iterates installs. *(Currently superseded by TUI coordinator — may be removed in future.)*
         *   `office_install/`: Files to deploy Microsoft 365:
             *   `install.ps1`: Custom script to download the Office Click-to-Run bootstrapper and configure it.
             *   `OfficeCustom.xml`: Custom ODT configuration file.
@@ -56,12 +58,17 @@ The `Install-App` function handles generic installations.
 
 ### 2. Microsoft Office Deployment (`src/app/office_install/`)
 *   Uses the Office Deployment Tool (ODT).
-*   **XML Settings:** In `OfficeCustom.xml`, display level must be configured correctly. Use `<Display Level="None" AcceptEULA="TRUE"/>` for fully silent unattended installs. Avoid invalid values like `"True"`.
+*   **XML Settings:** `OfficeCustom.xml` uses `<Display Level="None" AcceptEULA="TRUE"/>` for fully silent unattended installs. Also includes `<Property Name="FORCEAPPSHUTDOWN" Value="TRUE"/>` to close conflicting Office processes automatically.
+*   **Script behavior:** `install.ps1` downloads the bootstrapper, runs `/configure OfficeCustom.xml`, checks the exit code, and throws on failure. The installer file is only deleted on success (left in cache for retry/debug on failure).
+*   **Logs:** If the installer fails, ODT writes detailed logs to `%TEMP%`. Check those for the root cause.
+*   **Status:** ✅ Fixed.
 
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
-*   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive.
-*   **Parameters:** It accepts `/s` for silent installation, `/pEULA=1` to accept the license agreement, and `/pPRIVACYPOLICY=1` to accept the privacy policy.
-*   **Execution:** Run the executable directly with arguments: `/s`, `/pEULA=1`, `/pPRIVACYPOLICY=1`. Do not attempt to unpack it using 7-Zip (since 7-Zip may not be installed yet).
+*   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
+*   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents. The real setup executable is then found inside the extracted folder and run with `/s /pEULA=1 /pPRIVACYPOLICY=1`.
+*   **Prerequisite:** **7-Zip must be installed before KES.** All department profiles in `departments.json` are ordered so `7zip` comes before `kes`. Do not reorder them.
+*   **Extracted files location:** `C:\ProgramData\SZC\InstallCache\kes_extracted\`. Left in place on failure for debugging.
+*   **Status:** ✅ Fixed.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
 *   **Automatic discovery:** If no port/driver is specified, it uses WS-Discovery/TCP-IP discovery to install printers automatically.
@@ -71,16 +78,19 @@ The `Install-App` function handles generic installations.
     3.  Adds the local printer with the specified port and driver.
 *   **Gotchas:**
     *   Ensure parameter binding matches: use `-UrlDriver` when calling `Install-LocalPrinter` (do not confuse with `$DriverUrl`).
+*   **Status:** 🚧 Implementation deferred. Printer information (IPs, drivers, models) not yet collected. The TUI option is marked **Coming Soon**.
 
 ### 5. TUI (`src/tui/`)
 *   Entry point is `Start-Tui`, called from `main.ps1` via `src/tui/tui.ps1`.
 *   **Department Profiles:** Loaded from `config/departments.json` at startup. Each department has a preset list of `Apps` and `Printers` referenced by `id`. The JSON ids are resolved to display names using `$CommonApps` and `$Printers` at load time. Selecting a department auto-checks the relevant items.
+*   **Navigation rule:** All menus use **numbers only** for input. Letter-based shortcuts (A/N/Q/C) are not used anywhere. Extra options (Select All, Deselect All, Back) are appended as numbered items after the list.
 *   **Flow:**
     1. User selects a **Department Profile** (e.g., Ke Toan, Ky Thuat) which preloads a recommended set of apps and printers.
     2. User can optionally **customize** the app/printer selection manually.
     3. User can run **Collect System Information**, which gathers OS, CPU, RAM, disk, IP, MAC info and saves a report to `C:\ProgramData\SZC\`.
     4. User triggers **Start Deployment** to install selected apps and printers.
 *   **Adding a new department:** Add a new entry to `src/config/departments.json` with `id`, `name`, `apps` (list of app ids from `apps.json`), and `printers` (list of printer ids from `printers.json`). No code changes needed — TUI picks it up automatically.
+*   **Empty printer list:** If `printers.json` has no entries, the printer selection screen shows a friendly "No printers configured yet" message instead of an empty menu.
 
 ---
 
@@ -88,18 +98,30 @@ The `Install-App` function handles generic installations.
 
 The automation suite is organized into 4 distinct phases:
 
-1.  **Install Application Phase:** Automating the installation of standard applications via Winget or custom silent setup scripts (e.g., Microsoft Office, Kaspersky, Chrome, UniKey).
-2.  **Install Printer Phase:** Autodetecting and configuring network/local printers, creating printer ports, and downloading/installing printer drivers.
-3.  **Collect Information Phase:** *(Planned)* Gathering system configuration, hardware inventory, and network environment info.
+1.  **Install Application Phase:** *(Active — bugs in Office/Kaspersky pending fix)* Automating the installation of standard applications via Winget or custom silent setup scripts (e.g., Microsoft Office, Kaspersky, Chrome, UniKey).
+2.  **Install Printer Phase:** *(Deferred)* Waiting on printer hardware information (IPs, models, drivers). TUI menu option shows "Coming Soon".
+3.  **Collect Information Phase:** *(Implemented)* Gathers OS, CPU, RAM, disk, IP, MAC info and saves a report to `C:\ProgramData\SZC\SystemInfo_<ComputerName>.txt`.
 4.  **TUI (Text User Interface) Phase:** *(Active)* Interactive CLI menu driven by user department profiles. Allows selecting apps/printers per department, manual overrides, system information collection, and deployment.
 
 ---
 
 ## ⚠️ Important Gotchas for Future Agents
 
+*   **Always update `AGENTS.md`** at the end of every session. This is the memory for the next agent.
+*   **Number-only navigation:** All TUI menus use numbers exclusively. Do NOT introduce letter-based shortcuts (A, N, Q, C, etc.) into any menu. Extra actions (Select All, Back, etc.) are always appended as the next numbered item after the list.
 *   **PSScriptRoot Behavior:** `$PSScriptRoot` evaluates to the directory containing the file in which it is referenced. Be mindful of parent-child calling contexts.
 *   **String Interpolation in Catch Blocks:** In error handling, ensure you use subexpression syntax `$($_...)` instead of `${$_...}` to interpolate properties of the current error object.
     *   *Correct:* `Write-Error "Reason: $($_.Exception.Message)"`
     *   *Incorrect:* `Write-Error "Reason: ${$_.Exception.Message}"`
 *   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges.
 *   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside Ultrabox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
+
+---
+
+## 📋 Known Issues & Deferred Tasks
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Office 365 installer | ✅ Fixed | `Display Level="None"`, proper error handling, XML path fixed |
+| Kaspersky installer | ✅ Fixed | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. |
+| Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers) |

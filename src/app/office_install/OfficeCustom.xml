@@ -1,4 +1,4 @@
-<Configuration >
+<Configuration>
   <Add>
     <Product ID="O365BusinessRetail">
       <Language ID="en-us"/>
@@ -7,5 +7,6 @@
     </Product>
   </Add>
   <RemoveMSI/>
-  <Display Level="Full" AcceptEULA="TRUE"/>
+  <Display Level="None" AcceptEULA="TRUE"/>
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE"/>
 </Configuration>
