@@ -61,15 +61,20 @@ The `Install-App` function handles generic installations.
 *   Uses the Office Deployment Tool (ODT).
 *   **XML Settings:** `OfficeCustom.xml` uses `O365BusinessRetail` (correct Product ID for Microsoft 365 Business Standard/Premium), `en-us` + `vi-vn` languages, excludes Teams, `Display Level="None" AcceptEULA="TRUE"` for fully silent install. Also includes `FORCEAPPSHUTDOWN` to close conflicting Office processes.
 *   **Script behavior:** `install.ps1`:
-    1. Downloads the **ODT self-extracting package** from `https://go.microsoft.com/fwlink/p/?LinkID=626065` (stable fwlink, always points to the latest ODT — NOT the consumer `OfficeSetup.exe` bootstrapper).
-    2. Extracts `setup.exe` from it using `/quiet /extract:"<dir>"`.
-    3. Copies `OfficeCustom.xml` to the cache dir (space-free path).
-    4. Runs `setup.exe /configure "<xml path>"` for a fully silent, unattended install.
-    5. Cleans up on success; leaves files for debugging on failure.
+    1. Removes any leftover partial/corrupt ODT download from a previous attempt.
+    2. Downloads the **ODT self-extracting package** from `https://go.microsoft.com/fwlink/p/?LinkID=626065` using a two-method strategy:
+       - **Method 1:** `Invoke-WebRequest` with `$ProgressPreference = 'SilentlyContinue'` and `-MaximumRedirection 10`. If the downloaded file is missing or < 100KB, falls back to Method 2.
+       - **Method 2:** `System.Net.WebClient.DownloadFile()`, which handles fwlink redirects more reliably.
+    3. Validates the download: checks if the file is < 500KB (real ODT is ~3.4 MB) and sniffs the file header for HTML content (redirect/error page detection). Throws a descriptive error if validation fails.
+    4. Extracts `setup.exe` from it using `/quiet /extract:"<dir>"`.
+    5. Copies `OfficeCustom.xml` to the cache dir (space-free path).
+    6. Runs `setup.exe /configure "<xml path>"` for a fully silent, unattended install.
+    7. Cleans up on success; leaves files for debugging on failure.
 *   **Why not `OfficeSetup.exe`:** The consumer bootstrapper from the Microsoft 365 portal does NOT support `/configure <xml>`. It is UI-only and silently ignores the argument, giving a misleading success exit code. Always use `setup.exe` from the ODT package.
+*   **Download gotchas (fwlink redirect):** The `go.microsoft.com/fwlink` URL is a redirector. `Invoke-WebRequest` can fail to follow the redirect (downloading an HTML page instead of the binary) or the progress bar can stall/corrupt the download stream. The script now disables `$ProgressPreference`, adds `-MaximumRedirection 10`, and falls back to `System.Net.WebClient` if Method 1 fails. It also sniffs the downloaded file for HTML content to give a clear error message.
 *   **Path quoting:** `Start-Process -ArgumentList` joins array elements with spaces — paths are wrapped in escaped quotes `` `"$path`" `` and the XML is also copied to a space-free cache dir as double protection.
 *   **Logs:** If the installer fails, ODT writes detailed logs to `%TEMP%`. Check those for the root cause.
-*   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
+*   **Status:** 🧪 Testing — download reliability fixes applied, pending user verification on Windows.
 
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
 *   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
@@ -133,7 +138,7 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | 🧪 Testing | Now downloads real ODT (LinkID=626065), extracts setup.exe, runs `/configure`. Pending user verification. |
+| Office 365 installer | 🧪 Testing | Two-method download (Invoke-WebRequest → WebClient fallback), disabled ProgressPreference, MaximumRedirection 10, HTML sniffing for corrupt/redirect pages, lowered size threshold to 500KB. Pending user verification. |
 | Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |

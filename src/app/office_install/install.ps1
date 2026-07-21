@@ -23,21 +23,92 @@ Copy-Item -Path $OfficeXMLSrc -Destination $OfficeXML -Force
 $OdtPkg = Join-Path $CacheDir "officedeploymenttool.exe"
 $OdtUrl = "https://go.microsoft.com/fwlink/p/?LinkID=626065"
 
-Write-Output "Downloading Office Deployment Tool (ODT)..."
-try
+# Remove any leftover partial/corrupt download from a previous attempt
+if (Test-Path $OdtPkg) { Remove-Item $OdtPkg -Force }
+
+# --- Download helper function with two methods ---
+# Method 1: Invoke-WebRequest (with ProgressPreference disabled and explicit redirect following)
+# Method 2: System.Net.WebClient (more reliable for binary downloads through redirects)
+function Download-OdtPackage
 {
-  Invoke-WebRequest -Uri $OdtUrl -OutFile $OdtPkg -UseBasicParsing
-} catch
-{
-  throw "Failed to download ODT package: $($_.Exception.Message)"
+  param([string]$Url, [string]$OutFile)
+
+  # --- Try Method 1: Invoke-WebRequest ---
+  Write-Output "Downloading ODT (Method 1: Invoke-WebRequest)..."
+  try
+  {
+    # Disable progress bar — it is known to stall or corrupt downloads in PowerShell
+    $oldProgress = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+    try
+    {
+      Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -MaximumRedirection 10
+    }
+    finally
+    {
+      $ProgressPreference = $oldProgress
+    }
+
+    # Quick sanity check — if file exists and is > 100KB, Method 1 likely succeeded
+    if ((Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 100KB))
+    {
+      return
+    }
+    Write-Output "Method 1 produced a small or missing file, falling back..."
+  }
+  catch
+  {
+    Write-Output "Method 1 failed: $($_.Exception.Message). Falling back..."
+  }
+
+  # Clean up before retry
+  if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
+
+  # --- Try Method 2: System.Net.WebClient ---
+  # WebClient handles fwlink redirects more reliably than Invoke-WebRequest
+  Write-Output "Downloading ODT (Method 2: System.Net.WebClient)..."
+  try
+  {
+    $wc = New-Object System.Net.WebClient
+    $wc.DownloadFile($Url, $OutFile)
+  }
+  catch
+  {
+    throw "Both download methods failed. Last error: $($_.Exception.Message)"
+  }
+  finally
+  {
+    if ($wc) { $wc.Dispose() }
+  }
 }
 
-# Verify the download looks like a real binary (not an HTML error page)
+Download-OdtPackage -Url $OdtUrl -OutFile $OdtPkg
+
+# --- Verify the download is a real binary, not an HTML error/redirect page ---
+if (-not (Test-Path $OdtPkg))
+{
+  throw "ODT package file not found after download."
+}
+
 $odtSize = (Get-Item $OdtPkg).Length
 Write-Output "ODT package downloaded: $odtSize bytes"
-if ($odtSize -lt 1MB)
+
+# The real ODT package is ~3.4 MB. Anything under 500KB is almost certainly an HTML
+# redirect page, an error page, or a truncated download.
+if ($odtSize -lt 500KB)
 {
-  throw "ODT package too small ($odtSize bytes) — download may have failed or returned an error page."
+  # Check if the file looks like HTML (redirect page) rather than a binary
+  $head = Get-Content $OdtPkg -TotalCount 5 -ErrorAction SilentlyContinue
+  $headText = ($head -join "`n").ToLower()
+  if ($headText -match '<html|<head|<!doctype|window\.location')
+  {
+    Remove-Item $OdtPkg -Force -ErrorAction SilentlyContinue
+    throw "ODT download returned an HTML page instead of a binary (redirect not followed). " +
+          "Check network/proxy settings. File was $odtSize bytes."
+  }
+  Remove-Item $OdtPkg -Force -ErrorAction SilentlyContinue
+  throw "ODT package too small ($odtSize bytes) — download may be truncated or corrupted. " +
+        "Expected ~3.4 MB. Check network connectivity."
 }
 
 # --- Step 2: Extract setup.exe from the ODT self-extracting package ---
