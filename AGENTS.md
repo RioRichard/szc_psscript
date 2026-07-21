@@ -68,7 +68,7 @@ The `Install-App` function handles generic installations.
        - **Method 1:** `curl.exe -L` (ships with Windows 10 1803+ / Windows 11). Most reliable, handles redirects natively, retries 3 times.
        - **Method 2:** `Invoke-WebRequest` with `$ProgressPreference = 'SilentlyContinue'` and `-MaximumRedirection 10`.
        - **Method 3:** `System.Net.WebClient.DownloadFile()`.
-    3. Validates the download: checks if the file is < 500KB and sniffs the file header for HTML content (error page detection). Throws a descriptive error if validation fails.
+    3. Validates the download: checks if the file is < 10KB and sniffs the file header for HTML content (error page detection). The CDN `setup.exe` is a small bootstrapper, so only very tiny files (HTML error pages) are rejected. Throws a descriptive error if validation fails.
     4. Copies `OfficeCustom.xml` to the same directory as `setup.exe`.
     5. Runs `setup.exe /configure OfficeCustom.xml` for a fully silent, unattended install (uses `-WorkingDirectory` to avoid path issues).
 *   **Why Office CDN, not fwlink:** The old fwlink URL (`go.microsoft.com/fwlink/p/?LinkID=626065`) redirects to the **Microsoft Download Center HTML page** (not a direct binary). Both `Invoke-WebRequest` and `WebClient` download the HTML page instead of the executable, resulting in a ~5KB file that fails validation. The Office CDN URL (`officecdn.microsoft.com/pr/wsus/setup.exe`) is a **direct binary link** — no redirects, no HTML pages.
@@ -129,8 +129,9 @@ The automation suite is organized into 4 distinct phases:
     *   *Incorrect:* `Write-Error "Reason: ${$_.Exception.Message}"`
 *   **`$Custom` is a `[String[]]` array, not a string:** `Install-App`'s `$Custom` parameter is typed `[String[]]`. Splat it with `@Command` (not `$Command`) when calling the interpreter. Do NOT pass it to `[String]::IsNullOrWhiteSpace()` — use `$Custom.Count -gt 0` to check for content.
 *   **`Install-App` must NOT swallow errors:** The function must let exceptions propagate to the caller so the TUI's `try/catch` in `Start-Deployment` can correctly mark installs as FAILED. Never wrap the entire function body in a `try/catch` that only writes a non-terminating error.
-*   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges. `main.ps1` auto-elevates via UAC if not already running as Administrator — do NOT remove this check.
+*   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges. `main.ps1` auto-elevates via UAC if not already running as Administrator -- do NOT remove this check.
 *   **Do NOT use the fwlink URL for ODT:** `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to an HTML Download Center page, not a binary. Always use the Office CDN direct URL `https://officecdn.microsoft.com/pr/wsus/setup.exe`.
+*   **No Unicode special characters in .ps1 files:** Never use em-dash, en-dash, curly quotes, or any non-ASCII character in PowerShell scripts. They cause parse errors depending on system encoding. Use only plain ASCII: `--` instead of em-dash, straight quotes `"` instead of curly quotes, etc.
 *   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside Ultrabox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
 
 ---
@@ -139,7 +140,7 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | 🧪 Testing | Switched from fwlink (HTML redirect page) to Office CDN direct URL (`officecdn.microsoft.com/pr/wsus/setup.exe`). Three-method download fallback (curl.exe → Invoke-WebRequest → WebClient). HTML sniffing for corrupt downloads. Pending user verification. |
+| Office 365 installer | 🧪 Testing | Office CDN direct URL, three-method download fallback (curl.exe -> Invoke-WebRequest -> WebClient). Size threshold lowered to 10KB (CDN setup.exe is a small bootstrapper). HTML sniffing. All Unicode chars removed from script. Pending user verification. |
 | Auto-elevation in main.ps1 | ✅ Done | `main.ps1` checks for Administrator role and re-launches elevated via `-Verb RunAs` UAC prompt if needed. |
 | Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
