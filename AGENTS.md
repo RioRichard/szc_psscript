@@ -61,7 +61,7 @@ The `Install-App` function handles generic installations.
 
 ### 2. Microsoft Office Deployment (`src/app/office_install/`)
 *   Uses the Office Deployment Tool (ODT) `setup.exe`.
-*   **XML Settings:** `OfficeCustom.xml` uses `O365BusinessRetail` (correct Product ID for Microsoft 365 Business Standard/Premium), `en-us` + `vi-vn` languages, excludes Teams, `Display Level="None" AcceptEULA="TRUE"` for fully silent install. Also includes `FORCEAPPSHUTDOWN` to close conflicting Office processes.
+*   **XML Settings:** `OfficeCustom.xml` uses `O365BusinessRetail` (correct Product ID for Microsoft 365 Business Standard/Premium), `en-us` + `vi-vn` languages, excludes Teams, `Display Level="Full" AcceptEULA="TRUE"` for installation with a visible progress bar. Also includes `FORCEAPPSHUTDOWN` to close conflicting Office processes.
 *   **Script behavior:** `install.ps1`:
     1. Removes any leftover partial/corrupt download from a previous attempt.
     2. Downloads `setup.exe` directly from the **Office CDN** (`https://officecdn.microsoft.com/pr/wsus/setup.exe`) using a three-method fallback strategy:
@@ -70,7 +70,7 @@ The `Install-App` function handles generic installations.
        - **Method 3:** `System.Net.WebClient.DownloadFile()`.
     3. Validates the download: checks if the file is < 10KB and sniffs the file header for HTML content (error page detection). The CDN `setup.exe` is a small bootstrapper, so only very tiny files (HTML error pages) are rejected. Throws a descriptive error if validation fails.
     4. Copies `OfficeCustom.xml` to the same directory as `setup.exe`.
-    5. Runs `setup.exe /configure OfficeCustom.xml` for a fully silent, unattended install (uses `-WorkingDirectory` to avoid path issues).
+    5. Runs `setup.exe /configure OfficeCustom.xml` for an unattended install with a visible progress UI (uses `-WorkingDirectory` to avoid path issues).
 *   **Why Office CDN, not fwlink:** The old fwlink URL (`go.microsoft.com/fwlink/p/?LinkID=626065`) redirects to the **Microsoft Download Center HTML page** (not a direct binary). Both `Invoke-WebRequest` and `WebClient` download the HTML page instead of the executable, resulting in a ~5KB file that fails validation. The Office CDN URL (`officecdn.microsoft.com/pr/wsus/setup.exe`) is a **direct binary link** — no redirects, no HTML pages.
 *   **Why not `OfficeSetup.exe`:** The consumer bootstrapper from the Microsoft 365 portal does NOT support `/configure <xml>`. It is UI-only and silently ignores the argument, giving a misleading success exit code. Always use `setup.exe` from the ODT / Office CDN.
 *   **Logs:** If the installer fails, ODT writes detailed logs to `%TEMP%`. Check those for the root cause.
@@ -140,11 +140,11 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | 🧪 Testing | Office CDN direct URL, three-method download fallback (curl.exe -> Invoke-WebRequest -> WebClient). Size threshold lowered to 10KB (CDN setup.exe is a small bootstrapper). HTML sniffing. All Unicode chars removed from script. Pending user verification. |
+| Office 365 installer | 🧪 Testing | Office CDN direct URL, three-method download fallback (curl.exe -> Invoke-WebRequest -> WebClient). Size threshold lowered to 10KB (CDN setup.exe is a small bootstrapper). HTML sniffing. All Unicode chars removed from script. Display Level set to "Full" to show progress UI. Pending user verification. |
 | Auto-elevation in main.ps1 | ✅ Done | `main.ps1` checks for Administrator role and re-launches elevated via `-Verb RunAs` UAC prompt if needed. |
 | Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
-| Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers) |
+| Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers). Temporarily removed from Start-Deployment script entirely as it's on hold. |

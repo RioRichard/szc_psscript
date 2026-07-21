@@ -7,6 +7,6 @@
     </Product>
   </Add>
   <RemoveMSI/>
-  <Display Level="None" AcceptEULA="TRUE"/>
+  <Display Level="Full" AcceptEULA="TRUE"/>
   <Property Name="FORCEAPPSHUTDOWN" Value="TRUE"/>
 </Configuration>
