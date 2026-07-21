@@ -133,9 +133,10 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | 🧪 Testing | XML copied to cache dir + path quoted. Dot-sourced so errors are visible. Pending user verification. |
+| Office 365 installer | 🧪 Testing | Now downloads real ODT (LinkID=626065), extracts setup.exe, runs `/configure`. Pending user verification. |
 | Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
+| Wrong Office installer URL | ✅ Fixed | Old URL (linkid=2264705) downloaded consumer `OfficeSetup.exe` which ignores `/configure`. Now uses ODT package (LinkID=626065) |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers) |

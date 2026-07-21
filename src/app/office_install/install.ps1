@@ -1,40 +1,50 @@
-# Use $MyInvocation to find this script's own directory — works correctly even when dot-sourced
-$_thisDir     = Split-Path $MyInvocation.MyCommand.Path -Parent
-$OfficeXMLSrc = Join-Path $_thisDir "OfficeCustom.xml"
-
+$Url      = "https://go.microsoft.com/fwlink/?linkid=2264705&clcid=0x409&culture=en-us&country=us"
 $CacheDir = "C:\ProgramData\SZC\InstallCache"
-$OdtDir   = Join-Path $CacheDir "odt"
+$OfficeXMLSrc = Join-Path $PSScriptRoot "OfficeCustom.xml"
 
-# Ensure directories exist
+# Ensure cache directory exists
 New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
-New-Item -ItemType Directory -Force -Path $OdtDir   | Out-Null
 
-# Copy XML to cache dir (space-free path, quoted in ArgumentList for safety)
-$OfficeXML = Join-Path $OdtDir "OfficeCustom.xml"
+# Copy the XML to the cache dir (guaranteed space-free path) so the ODT can always find it
+$OfficeXML = Join-Path $CacheDir "OfficeCustom.xml"
 Copy-Item -Path $OfficeXMLSrc -Destination $OfficeXML -Force
 
-# --- Step 1: Download the ODT self-extracting package ---
-# This fwlink downloads the real Office Deployment Tool (ODT), NOT the consumer
-# OfficeSetup.exe bootstrapper. The ODT must be extracted first to get setup.exe,
-# which is the only binary that supports: setup.exe /configure <xml>
-$OdtPkg = Join-Path $CacheDir "officedeploymenttool.exe"
-$OdtUrl = "https://go.microsoft.com/fwlink/p/?LinkID=626065"
+$Installer = Join-Path $CacheDir "OfficeSetup.exe"
 
-Write-Output "Downloading Office Deployment Tool (ODT)..."
+Write-Output "Downloading Office Click-to-Run bootstrapper..."
 try
 {
-  Invoke-WebRequest -Uri $OdtUrl -OutFile $OdtPkg -UseBasicParsing
+  Invoke-WebRequest -Uri $Url -OutFile $Installer -UseBasicParsing
 } catch
 {
-  throw "Failed to download ODT package: $($_.Exception.Message)"
+  throw "Failed to download Office installer: $($_.Exception.Message)"
 }
 
-# --- Step 2: Extract setup.exe from the ODT self-extracting package ---
-# The ODT package is a self-extracting exe; /quiet suppresses UI, /extract targets a folder
-Write-Output "Extracting ODT setup.exe to: $OdtDir"
-$extractProc = Start-Process `
+Write-Output "Starting Office deployment with config: $OfficeXML"
+# NOTE: Start-Process joins ArgumentList elements with spaces, so quote the path
+# to guard against spaces in the path. Also the XML is now in $CacheDir (no spaces).
+$Proc = Start-Process `
+  -FilePath $Installer `
+  -ArgumentList @("/configure", "`"$OfficeXML`"") `
+  -NoNewWindow `
+  -PassThru `
+  -Wait
+
+$exitCode = $Proc.ExitCode
+Write-Output "Office setup exited with code: $exitCode"
+
+# Clean up installer only on success
+if ($exitCode -eq 0)
+{
+  Remove-Item $Installer -Force -ErrorAction SilentlyContinue
+  Write-Output "Office installation completed successfully."
+} else
+{
+  Write-Output "Installer left at: $Installer (for retry/debugging)"
+  throw "Office setup failed with exit code $exitCode. Check logs in %TEMP% for details."
+}
   -FilePath $OdtPkg `
-  -ArgumentList @("/quiet", "/extract:`"$OdtDir`"") `
+  -ArgumentList "/quiet /extract:$OdtDir" `
   -NoNewWindow `
   -PassThru `
   -Wait
@@ -50,11 +60,11 @@ if (-not (Test-Path $SetupExe))
   throw "setup.exe not found after ODT extraction. Expected at: $SetupExe"
 }
 
-# --- Step 3: Run setup.exe /configure with our XML (fully silent) ---
+# --- Step 3: Run setup.exe /configure with our XML (fully silent, no UI) ---
 Write-Output "Starting Office 365 deployment with config: $OfficeXML"
 $Proc = Start-Process `
   -FilePath $SetupExe `
-  -ArgumentList @("/configure", "`"$OfficeXML`"") `
+  -ArgumentList "/configure `"$OfficeXML`"" `
   -NoNewWindow `
   -PassThru `
   -Wait
@@ -70,5 +80,5 @@ if ($exitCode -eq 0)
 } else
 {
   Write-Output "ODT files left at: $OdtDir (for retry/debugging)"
-  throw "Office setup failed with exit code $exitCode. Check logs in %TEMP% for details."
+  throw "Office setup failed with exit code $exitCode. Check ODT logs in %TEMP% for details."
 }
