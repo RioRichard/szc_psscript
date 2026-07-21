@@ -5,27 +5,28 @@ function Install-App
     [String]$Name,
     [String]$PackageName,
     [String]$PackageManager,
-    $Custom
+    [String[]]$Custom
   )
-  try
-  {
-    if (![String]::IsNullOrWhiteSpace($Custom))
-    {
-      $Command = $Custom
-    }
-    else
-    {
-      $Command = @("install", "-e", "--id", "$PackageName", "--accept-package-agreements", "--accept-source-agreements", "-h")
-    }
 
-    Write-Host "Running: $PackageManager $Command"
-    & $PackageManager $Command
-  } catch
+  # Determine the command arguments
+  if ($Custom -and $Custom.Count -gt 0)
   {
-    Write-Error "Error when install: $Name"
-  } finally
-  {
-    Write-Host "Installed app $Name"
+    $Command = $Custom
   }
-  
+  else
+  {
+    $Command = @("install", "-e", "--id", "$PackageName", "--accept-package-agreements", "--accept-source-agreements", "-h")
+  }
+
+  Write-Host "Running: $PackageManager $($Command -join ' ')"
+
+  # Use call operator; errors from child process or thrown exceptions propagate to the caller
+  & $PackageManager @Command
+
+  if ($LASTEXITCODE -and $LASTEXITCODE -ne 0)
+  {
+    throw "'$Name' installer exited with code $LASTEXITCODE."
+  }
+
+  Write-Host "Successfully installed: $Name"
 }

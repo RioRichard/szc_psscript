@@ -49,26 +49,28 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 
 ### 1. Common Application Installer (`src/app/install_app.ps1`)
 The `Install-App` function handles generic installations.
-*   **Winget Mode:** If no `$Custom` command is provided, it calls `winget install -e --id <PackageName>`.
-*   **Custom Mode:** If `$Custom` is provided, it executes the command via the interpreter program defined in `$PackageManager`.
+*   **Winget Mode:** If `$Custom` is empty/null, it calls `winget install -e --id <PackageName> --accept-package-agreements --accept-source-agreements -h`.
+*   **Custom Mode:** If `$Custom` is a non-empty `[String[]]` array, it splats the array as arguments to `$PackageManager` (e.g. `powershell -ExecutionPolicy ByPass <scriptPath>`).
+*   **Error propagation:** The function does **not** catch exceptions — it lets them bubble up to the caller (the TUI's `Start-Deployment`). It also checks `$LASTEXITCODE` and throws if the process exited non-zero.
 *   **Signature:**
     ```powershell
-    Install-App -Name <String> -PackageName <String> -PackageManager <String> -Custom <Array/String>
+    Install-App -Name <String> -PackageName <String> -PackageManager <String> -Custom <String[]>
     ```
 
 ### 2. Microsoft Office Deployment (`src/app/office_install/`)
 *   Uses the Office Deployment Tool (ODT).
 *   **XML Settings:** `OfficeCustom.xml` uses `<Display Level="None" AcceptEULA="TRUE"/>` for fully silent unattended installs. Also includes `<Property Name="FORCEAPPSHUTDOWN" Value="TRUE"/>` to close conflicting Office processes automatically.
-*   **Script behavior:** `install.ps1` downloads the bootstrapper, runs `/configure OfficeCustom.xml`, checks the exit code, and throws on failure. The installer file is only deleted on success (left in cache for retry/debug on failure).
+*   **Script behavior:** `install.ps1` copies `OfficeCustom.xml` to the cache dir (`C:\ProgramData\SZC\InstallCache\`), downloads the bootstrapper, runs `/configure "<xml path>"`, checks the exit code, and throws on failure. The installer file is only deleted on success (left in cache for retry/debug on failure).
+*   **Path quoting:** `Start-Process -ArgumentList` joins array elements with spaces — if the XML path contains spaces, the ODT would misparse it. Two defenses are applied: (1) `OfficeCustom.xml` is copied to `C:\ProgramData\SZC\InstallCache\` (no spaces), and (2) the path is wrapped in escaped quotes `` `"$OfficeXML`" `` in the ArgumentList.
 *   **Logs:** If the installer fails, ODT writes detailed logs to `%TEMP%`. Check those for the root cause.
-*   **Status:** ✅ Fixed.
+*   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
 
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
 *   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
 *   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents. The real setup executable is then found inside the extracted folder and run with `/s /pEULA=1 /pPRIVACYPOLICY=1`.
 *   **Prerequisite:** **7-Zip must be installed before KES.** All department profiles in `departments.json` are ordered so `7zip` comes before `kes`. Do not reorder them.
 *   **Extracted files location:** `C:\ProgramData\SZC\InstallCache\kes_extracted\`. Left in place on failure for debugging.
-*   **Status:** ✅ Fixed.
+*   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
 *   **Automatic discovery:** If no port/driver is specified, it uses WS-Discovery/TCP-IP discovery to install printers automatically.
@@ -98,7 +100,7 @@ The `Install-App` function handles generic installations.
 
 The automation suite is organized into 4 distinct phases:
 
-1.  **Install Application Phase:** *(Active — bugs in Office/Kaspersky pending fix)* Automating the installation of standard applications via Winget or custom silent setup scripts (e.g., Microsoft Office, Kaspersky, Chrome, UniKey).
+1.  **Install Application Phase:** *(Active)* Automating the installation of standard applications via Winget or custom silent setup scripts (e.g., Microsoft Office, Kaspersky, Chrome, UniKey). Core installer bugs fixed — pending user verification.
 2.  **Install Printer Phase:** *(Deferred)* Waiting on printer hardware information (IPs, models, drivers). TUI menu option shows "Coming Soon".
 3.  **Collect Information Phase:** *(Implemented)* Gathers OS, CPU, RAM, disk, IP, MAC info and saves a report to `C:\ProgramData\SZC\SystemInfo_<ComputerName>.txt`.
 4.  **TUI (Text User Interface) Phase:** *(Active)* Interactive CLI menu driven by user department profiles. Allows selecting apps/printers per department, manual overrides, system information collection, and deployment.
@@ -113,6 +115,8 @@ The automation suite is organized into 4 distinct phases:
 *   **String Interpolation in Catch Blocks:** In error handling, ensure you use subexpression syntax `$($_...)` instead of `${$_...}` to interpolate properties of the current error object.
     *   *Correct:* `Write-Error "Reason: $($_.Exception.Message)"`
     *   *Incorrect:* `Write-Error "Reason: ${$_.Exception.Message}"`
+*   **`$Custom` is a `[String[]]` array, not a string:** `Install-App`'s `$Custom` parameter is typed `[String[]]`. Splat it with `@Command` (not `$Command`) when calling the interpreter. Do NOT pass it to `[String]::IsNullOrWhiteSpace()` — use `$Custom.Count -gt 0` to check for content.
+*   **`Install-App` must NOT swallow errors:** The function must let exceptions propagate to the caller so the TUI's `try/catch` in `Start-Deployment` can correctly mark installs as FAILED. Never wrap the entire function body in a `try/catch` that only writes a non-terminating error.
 *   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges.
 *   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside Ultrabox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
 
@@ -122,6 +126,8 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | ✅ Fixed | `Display Level="None"`, proper error handling, XML path fixed |
-| Kaspersky installer | ✅ Fixed | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. |
+| Office 365 installer | 🧪 Testing | `Display Level="None"`, XML copied to cache dir + path quoted in ArgumentList. Pending user verification. |
+| Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
+| `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
+| `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers) |

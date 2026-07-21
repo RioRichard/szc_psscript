@@ -146,92 +146,156 @@ function Show-DepartmentMenu
 function Start-Deployment
 {
   Clear-Host
-  $appsToInstall = $CommonApps | Where-Object { $script:selectedApps[$_.Id] }
-  $printersToInstall = $Printers | Where-Object { $script:selectedPrinters[$_.Id] }
-  
+  $appsToInstall     = $CommonApps | Where-Object { $script:selectedApps[$_.Id] }
+  $printersToInstall = $Printers   | Where-Object { $script:selectedPrinters[$_.Id] }
+
   if ($appsToInstall.Count -eq 0 -and $printersToInstall.Count -eq 0)
   {
-    Write-Host "No applications or printers selected for installation." -ForegroundColor Yellow
+    Write-Host "  No applications or printers selected for installation." -ForegroundColor Yellow
     Show-PressEnterToContinue
     return
   }
-  
+
+  # --- Confirm screen ---
   Write-Header "CONFIRM DEPLOYMENT"
-  Write-Host " Profile Selected: $($script:currentDepartmentName)" -ForegroundColor Yellow
+  Write-Host "  Profile: $($script:currentDepartmentName)" -ForegroundColor Yellow
   Write-Host ""
-  
+
   if ($appsToInstall.Count -gt 0)
   {
-    Write-Host " Applications to install:" -ForegroundColor Yellow
+    Write-Host "  Applications to install:" -ForegroundColor Cyan
     foreach ($app in $appsToInstall)
-    {
-      Write-Host "   - $($app.Name)"
-    }
+    { Write-Host "    - $($app.Name)" }
   }
   if ($printersToInstall.Count -gt 0)
   {
-    Write-Host " Printers to install:" -ForegroundColor Yellow
+    Write-Host "  Printers to install:" -ForegroundColor Cyan
     foreach ($printer in $printersToInstall)
-    {
-      Write-Host "   - $($printer.Name)"
-    }
+    { Write-Host "    - $($printer.Name)" }
   }
-  
+
+  Write-Divider
+  Write-Host "  1. Start Deployment"
+  Write-Host "  2. Cancel"
   Write-Footer
-  
-  $confirm = (Read-Host "Do you want to proceed with installation? (Y/N)").Trim().ToUpper()
-  if ($confirm -ne "Y")
+
+  $confirm = (Read-Host "Choose (1-2)").Trim()
+  if ($confirm -ne "1")
   {
-    Write-Host "Deployment cancelled." -ForegroundColor Yellow
+    Write-Host "  Deployment cancelled." -ForegroundColor Yellow
     Show-PressEnterToContinue
     return
   }
-  
+
+  # --- Track results ---
+  $appResults     = [System.Collections.Generic.List[hashtable]]::new()
+  $printerResults = [System.Collections.Generic.List[hashtable]]::new()
+
   Clear-Host
   Write-Header "DEPLOYMENT IN PROGRESS"
   Write-Host ""
-  
+
   # Install Applications
   if ($appsToInstall.Count -gt 0)
   {
-    Write-Host "[*] Starting application installations..." -ForegroundColor Cyan
+    Write-Host "  [*] Installing applications..." -ForegroundColor Cyan
+    Write-Host ""
     foreach ($app in $appsToInstall)
     {
-      Write-Host "Installing: $($app.Name)..." -ForegroundColor Yellow
-      
+      Write-Host "  --> $($app.Name)..." -ForegroundColor Yellow -NoNewline
+      $result = @{ Name = $app.Name; Status = ""; Error = "" }
       try
       {
         Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -Custom $app.Custom
-        Write-Host "[+] $($app.Name) completed successfully!" -ForegroundColor Green
+        $result.Status = "OK"
+        Write-Host " Done" -ForegroundColor Green
       } catch
       {
-        Write-Host "[-] Failed to install $($app.Name): $($_.Exception.Message)" -ForegroundColor Red
+        $result.Status = "FAILED"
+        $result.Error  = $_.Exception.Message
+        Write-Host " FAILED" -ForegroundColor Red
+        Write-Host "      $($_.Exception.Message)" -ForegroundColor DarkRed
       }
-      Write-Host ""
+      $appResults.Add($result)
     }
   }
-  
+
   # Install Printers
   if ($printersToInstall.Count -gt 0)
   {
-    Write-Host "[*] Starting printer installations..." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  [*] Installing printers..." -ForegroundColor Cyan
+    Write-Host ""
     foreach ($printer in $printersToInstall)
     {
-      Write-Host "Installing: $($printer.Name)..." -ForegroundColor Yellow
-      
+      Write-Host "  --> $($printer.Name)..." -ForegroundColor Yellow -NoNewline
+      $result = @{ Name = $printer.Name; Status = ""; Error = "" }
       try
       {
         Install-LocalPrinter -Name $printer.Name -Url $printer.Url -Port $printer.Port -Driver $printer.Driver -UrlDriver $printer.UrlDriver
-        Write-Host "[+] $($printer.Name) completed successfully!" -ForegroundColor Green
+        $result.Status = "OK"
+        Write-Host " Done" -ForegroundColor Green
       } catch
       {
-        Write-Host "[-] Failed to install $($printer.Name): $($_.Exception.Message)" -ForegroundColor Red
+        $result.Status = "FAILED"
+        $result.Error  = $_.Exception.Message
+        Write-Host " FAILED" -ForegroundColor Red
+        Write-Host "      $($_.Exception.Message)" -ForegroundColor DarkRed
       }
-      Write-Host ""
+      $printerResults.Add($result)
     }
   }
-  
-  Write-Header "DEPLOYMENT FINISHED"
+
+  # --- Summary Report ---
+  Write-Host ""
+  Write-Header "DEPLOYMENT SUMMARY"
+  Write-Host "  Profile : $($script:currentDepartmentName)" -ForegroundColor Yellow
+  Write-Host "  Finished: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Yellow
+  Write-Host ""
+
+  if ($appResults.Count -gt 0)
+  {
+    Write-Host "  APPLICATIONS" -ForegroundColor Cyan
+    Write-Host "  ------------"
+    foreach ($r in $appResults)
+    {
+      if ($r.Status -eq "OK")
+      { Write-Host "  [ OK ]  $($r.Name)" -ForegroundColor Green }
+      else
+      {
+        Write-Host "  [FAIL]  $($r.Name)" -ForegroundColor Red
+        if ($r.Error) { Write-Host "          $($r.Error)" -ForegroundColor DarkRed }
+      }
+    }
+    $okCount   = ($appResults | Where-Object { $_.Status -eq "OK" }).Count
+    $failCount = $appResults.Count - $okCount
+    Write-Host ""
+    Write-Host "  Result: $okCount / $($appResults.Count) installed." -ForegroundColor $(if ($failCount -eq 0) { "Green" } else { "Yellow" })
+  }
+
+  if ($printerResults.Count -gt 0)
+  {
+    Write-Host ""
+    Write-Host "  PRINTERS" -ForegroundColor Cyan
+    Write-Host "  --------"
+    foreach ($r in $printerResults)
+    {
+      if ($r.Status -eq "OK")
+      { Write-Host "  [ OK ]  $($r.Name)" -ForegroundColor Green }
+      else
+      {
+        Write-Host "  [FAIL]  $($r.Name)" -ForegroundColor Red
+        if ($r.Error) { Write-Host "          $($r.Error)" -ForegroundColor DarkRed }
+      }
+    }
+    $okCount   = ($printerResults | Where-Object { $_.Status -eq "OK" }).Count
+    $failCount = $printerResults.Count - $okCount
+    Write-Host ""
+    Write-Host "  Result: $okCount / $($printerResults.Count) installed." -ForegroundColor $(if ($failCount -eq 0) { "Green" } else { "Yellow" })
+  }
+
+  Write-Host ""
+  Write-Footer
   Show-PressEnterToContinue
 }
 

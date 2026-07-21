@@ -1,9 +1,13 @@
 $Url      = "https://go.microsoft.com/fwlink/?linkid=2264705&clcid=0x409&culture=en-us&country=us"
 $CacheDir = "C:\ProgramData\SZC\InstallCache"
-$OfficeXML = Join-Path $PSScriptRoot "OfficeCustom.xml"
+$OfficeXMLSrc = Join-Path $PSScriptRoot "OfficeCustom.xml"
 
 # Ensure cache directory exists
 New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+
+# Copy the XML to the cache dir (guaranteed space-free path) so the ODT can always find it
+$OfficeXML = Join-Path $CacheDir "OfficeCustom.xml"
+Copy-Item -Path $OfficeXMLSrc -Destination $OfficeXML -Force
 
 $Installer = Join-Path $CacheDir "OfficeSetup.exe"
 
@@ -17,9 +21,11 @@ try
 }
 
 Write-Output "Starting Office deployment with config: $OfficeXML"
+# NOTE: Start-Process joins ArgumentList elements with spaces, so quote the path
+# to guard against spaces in the path. Also the XML is now in $CacheDir (no spaces).
 $Proc = Start-Process `
   -FilePath $Installer `
-  -ArgumentList @("/configure", $OfficeXML) `
+  -ArgumentList @("/configure", "`"$OfficeXML`"") `
   -NoNewWindow `
   -PassThru `
   -Wait
