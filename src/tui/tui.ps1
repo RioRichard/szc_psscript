@@ -12,17 +12,16 @@ $departmentsJsonPath = Join-Path $PSScriptRoot "../config/departments.json"
 # Parse application definitions
 $_apps = Get-Content $appsJsonPath -Raw | ConvertFrom-Json
 $CommonApps = foreach ($app in $_apps) {
-  $custom = ""
+  $customScript = ""
   if ($app.customScript) {
-    $scriptPath = Join-Path $PSScriptRoot "../$($app.customScript)"
-    $custom = @("-ExecutionPolicy", "ByPass", $scriptPath)
+    $customScript = Join-Path $PSScriptRoot "../$($app.customScript)"
   }
   @{
     Id             = $app.id
     Name           = $app.name
     Package        = $app.package
     PackageManager = $app.packageManager
-    Custom         = $custom
+    CustomScript   = $customScript
   }
 }
 
@@ -206,7 +205,7 @@ function Start-Deployment
       $result = @{ Name = $app.Name; Status = ""; Error = "" }
       try
       {
-        Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -Custom $app.Custom
+        Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -CustomScript $app.CustomScript
         $result.Status = "OK"
         Write-Host " Done" -ForegroundColor Green
       } catch

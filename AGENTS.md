@@ -59,9 +59,15 @@ The `Install-App` function handles generic installations.
 
 ### 2. Microsoft Office Deployment (`src/app/office_install/`)
 *   Uses the Office Deployment Tool (ODT).
-*   **XML Settings:** `OfficeCustom.xml` uses `<Display Level="None" AcceptEULA="TRUE"/>` for fully silent unattended installs. Also includes `<Property Name="FORCEAPPSHUTDOWN" Value="TRUE"/>` to close conflicting Office processes automatically.
-*   **Script behavior:** `install.ps1` copies `OfficeCustom.xml` to the cache dir (`C:\ProgramData\SZC\InstallCache\`), downloads the bootstrapper, runs `/configure "<xml path>"`, checks the exit code, and throws on failure. The installer file is only deleted on success (left in cache for retry/debug on failure).
-*   **Path quoting:** `Start-Process -ArgumentList` joins array elements with spaces — if the XML path contains spaces, the ODT would misparse it. Two defenses are applied: (1) `OfficeCustom.xml` is copied to `C:\ProgramData\SZC\InstallCache\` (no spaces), and (2) the path is wrapped in escaped quotes `` `"$OfficeXML`" `` in the ArgumentList.
+*   **XML Settings:** `OfficeCustom.xml` uses `O365BusinessRetail` (correct Product ID for Microsoft 365 Business Standard/Premium), `en-us` + `vi-vn` languages, excludes Teams, `Display Level="None" AcceptEULA="TRUE"` for fully silent install. Also includes `FORCEAPPSHUTDOWN` to close conflicting Office processes.
+*   **Script behavior:** `install.ps1`:
+    1. Downloads the **ODT self-extracting package** from `https://go.microsoft.com/fwlink/p/?LinkID=626065` (stable fwlink, always points to the latest ODT — NOT the consumer `OfficeSetup.exe` bootstrapper).
+    2. Extracts `setup.exe` from it using `/quiet /extract:"<dir>"`.
+    3. Copies `OfficeCustom.xml` to the cache dir (space-free path).
+    4. Runs `setup.exe /configure "<xml path>"` for a fully silent, unattended install.
+    5. Cleans up on success; leaves files for debugging on failure.
+*   **Why not `OfficeSetup.exe`:** The consumer bootstrapper from the Microsoft 365 portal does NOT support `/configure <xml>`. It is UI-only and silently ignores the argument, giving a misleading success exit code. Always use `setup.exe` from the ODT package.
+*   **Path quoting:** `Start-Process -ArgumentList` joins array elements with spaces — paths are wrapped in escaped quotes `` `"$path`" `` and the XML is also copied to a space-free cache dir as double protection.
 *   **Logs:** If the installer fails, ODT writes detailed logs to `%TEMP%`. Check those for the root cause.
 *   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
 
@@ -111,7 +117,8 @@ The automation suite is organized into 4 distinct phases:
 
 *   **Always update `AGENTS.md`** at the end of every session. This is the memory for the next agent.
 *   **Number-only navigation:** All TUI menus use numbers exclusively. Do NOT introduce letter-based shortcuts (A, N, Q, C, etc.) into any menu. Extra actions (Select All, Back, etc.) are always appended as the next numbered item after the list.
-*   **PSScriptRoot Behavior:** `$PSScriptRoot` evaluates to the directory containing the file in which it is referenced. Be mindful of parent-child calling contexts.
+*   **`$PSScriptRoot` vs dot-source:** `$PSScriptRoot` resolves to the **caller's** directory when a script is dot-sourced. Custom install scripts (`office_install/install.ps1`, `kes_install/install.ps1`) must use `Split-Path $MyInvocation.MyCommand.Path -Parent` to reliably find their own directory.
+*   **Custom scripts are dot-sourced, not subprocess:** `Install-App` dot-sources custom scripts (`. $CustomScript`) directly in the current process. This means `throw` inside a custom script propagates straight up to the TUI's `try/catch`, and all `Write-Host` output appears in the TUI console. Do NOT change this back to spawning a child `powershell.exe` — that approach hid errors and output.
 *   **String Interpolation in Catch Blocks:** In error handling, ensure you use subexpression syntax `$($_...)` instead of `${$_...}` to interpolate properties of the current error object.
     *   *Correct:* `Write-Error "Reason: $($_.Exception.Message)"`
     *   *Incorrect:* `Write-Error "Reason: ${$_.Exception.Message}"`
@@ -126,8 +133,9 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | 🧪 Testing | `Display Level="None"`, XML copied to cache dir + path quoted in ArgumentList. Pending user verification. |
+| Office 365 installer | 🧪 Testing | XML copied to cache dir + path quoted. Dot-sourced so errors are visible. Pending user verification. |
 | Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
+| Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers) |
