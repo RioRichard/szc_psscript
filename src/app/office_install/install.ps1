@@ -16,28 +16,54 @@ New-Item -ItemType Directory -Force -Path $OdtDir   | Out-Null
 $OfficeXML = Join-Path $OdtDir "OfficeCustom.xml"
 Copy-Item -Path $OfficeXMLSrc -Destination $OfficeXML -Force
 
-# --- Step 1: Download the ODT self-extracting package ---
-# LinkID=626065 -> real Office Deployment Tool (officedeploymenttool_*.exe)
-# Do NOT use linkid=2264705 — that is the consumer OfficeSetup.exe bootstrapper
-# which ignores /configure <xml> entirely and gives a misleading success exit code.
-$OdtPkg = Join-Path $CacheDir "officedeploymenttool.exe"
-$OdtUrl = "https://go.microsoft.com/fwlink/p/?LinkID=626065"
+# --- Step 1: Obtain ODT setup.exe ---
+# The fwlink URL (LinkID=626065) redirects to the Microsoft Download Center *web page*,
+# NOT a direct binary. Both Invoke-WebRequest and WebClient end up downloading the
+# HTML page instead of the real file. This is the root cause of the "small file" errors.
+#
+# Solution: Download setup.exe directly from the Office CDN, which is a stable, direct
+# binary URL that does not involve any redirects or HTML pages.
+# This is the same setup.exe that the ODT self-extracting package would have extracted.
+$SetupExe = Join-Path $OdtDir "setup.exe"
+$CdnUrl   = "https://officecdn.microsoft.com/pr/wsus/setup.exe"
 
 # Remove any leftover partial/corrupt download from a previous attempt
-if (Test-Path $OdtPkg) { Remove-Item $OdtPkg -Force }
+if (Test-Path $SetupExe) { Remove-Item $SetupExe -Force }
 
-# --- Download helper function with two methods ---
-# Method 1: Invoke-WebRequest (with ProgressPreference disabled and explicit redirect following)
-# Method 2: System.Net.WebClient (more reliable for binary downloads through redirects)
-function Download-OdtPackage
+# --- Download helper: try multiple methods for maximum reliability ---
+function Download-SetupExe
 {
   param([string]$Url, [string]$OutFile)
 
-  # --- Try Method 1: Invoke-WebRequest ---
-  Write-Output "Downloading ODT (Method 1: Invoke-WebRequest)..."
+  # --- Method 1: curl.exe (ships with Windows 10 1803+ / Windows 11) ---
+  # curl.exe handles redirects natively with -L and is the most reliable option.
+  $curlPath = Get-Command curl.exe -ErrorAction SilentlyContinue
+  if ($curlPath)
+  {
+    Write-Output "Downloading setup.exe (Method 1: curl.exe)..."
+    try
+    {
+      $curlProc = Start-Process -FilePath "curl.exe" `
+        -ArgumentList "-L", "-o", "`"$OutFile`"", "--retry", "3", "--retry-delay", "5", "-s", "-S", "`"$Url`"" `
+        -NoNewWindow -PassThru -Wait
+
+      if ($curlProc.ExitCode -eq 0 -and (Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 100KB))
+      {
+        return
+      }
+      Write-Output "curl.exe produced a small or missing file (exit code $($curlProc.ExitCode)), falling back..."
+    }
+    catch
+    {
+      Write-Output "curl.exe failed: $($_.Exception.Message). Falling back..."
+    }
+    if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
+  }
+
+  # --- Method 2: Invoke-WebRequest (with ProgressPreference disabled) ---
+  Write-Output "Downloading setup.exe (Method 2: Invoke-WebRequest)..."
   try
   {
-    # Disable progress bar — it is known to stall or corrupt downloads in PowerShell
     $oldProgress = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
     try
@@ -49,24 +75,20 @@ function Download-OdtPackage
       $ProgressPreference = $oldProgress
     }
 
-    # Quick sanity check — if file exists and is > 100KB, Method 1 likely succeeded
     if ((Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 100KB))
     {
       return
     }
-    Write-Output "Method 1 produced a small or missing file, falling back..."
+    Write-Output "Invoke-WebRequest produced a small or missing file, falling back..."
   }
   catch
   {
-    Write-Output "Method 1 failed: $($_.Exception.Message). Falling back..."
+    Write-Output "Invoke-WebRequest failed: $($_.Exception.Message). Falling back..."
   }
-
-  # Clean up before retry
   if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
 
-  # --- Try Method 2: System.Net.WebClient ---
-  # WebClient handles fwlink redirects more reliably than Invoke-WebRequest
-  Write-Output "Downloading ODT (Method 2: System.Net.WebClient)..."
+  # --- Method 3: System.Net.WebClient ---
+  Write-Output "Downloading setup.exe (Method 3: System.Net.WebClient)..."
   try
   {
     $wc = New-Object System.Net.WebClient
@@ -74,7 +96,7 @@ function Download-OdtPackage
   }
   catch
   {
-    throw "Both download methods failed. Last error: $($_.Exception.Message)"
+    throw "All download methods failed. Last error: $($_.Exception.Message)"
   }
   finally
   {
@@ -82,58 +104,35 @@ function Download-OdtPackage
   }
 }
 
-Download-OdtPackage -Url $OdtUrl -OutFile $OdtPkg
+Download-SetupExe -Url $CdnUrl -OutFile $SetupExe
 
-# --- Verify the download is a real binary, not an HTML error/redirect page ---
-if (-not (Test-Path $OdtPkg))
+# --- Validate the downloaded setup.exe ---
+if (-not (Test-Path $SetupExe))
 {
-  throw "ODT package file not found after download."
+  throw "setup.exe not found after download."
 }
 
-$odtSize = (Get-Item $OdtPkg).Length
-Write-Output "ODT package downloaded: $odtSize bytes"
+$setupSize = (Get-Item $SetupExe).Length
+Write-Output "setup.exe downloaded: $setupSize bytes"
 
-# The real ODT package is ~3.4 MB. Anything under 500KB is almost certainly an HTML
-# redirect page, an error page, or a truncated download.
-if ($odtSize -lt 500KB)
+# The real setup.exe is typically > 7 MB. Anything under 500KB is suspicious.
+if ($setupSize -lt 500KB)
 {
   # Check if the file looks like HTML (redirect page) rather than a binary
-  $head = Get-Content $OdtPkg -TotalCount 5 -ErrorAction SilentlyContinue
+  $head = Get-Content $SetupExe -TotalCount 5 -ErrorAction SilentlyContinue
   $headText = ($head -join "`n").ToLower()
   if ($headText -match '<html|<head|<!doctype|window\.location')
   {
-    Remove-Item $OdtPkg -Force -ErrorAction SilentlyContinue
-    throw "ODT download returned an HTML page instead of a binary (redirect not followed). " +
-          "Check network/proxy settings. File was $odtSize bytes."
+    Remove-Item $SetupExe -Force -ErrorAction SilentlyContinue
+    throw "Download returned an HTML page instead of setup.exe. " +
+          "Check network/proxy settings. File was $setupSize bytes."
   }
-  Remove-Item $OdtPkg -Force -ErrorAction SilentlyContinue
-  throw "ODT package too small ($odtSize bytes) — download may be truncated or corrupted. " +
-        "Expected ~3.4 MB. Check network connectivity."
+  Remove-Item $SetupExe -Force -ErrorAction SilentlyContinue
+  throw "setup.exe too small ($setupSize bytes) — download may be truncated or corrupted. " +
+        "Check network connectivity."
 }
 
-# --- Step 2: Extract setup.exe from the ODT self-extracting package ---
-# Pass the argument as a single string without quotes around the path.
-# Some self-extractors misparse /switch:"quoted path" when the path has no spaces.
-Write-Output "Extracting ODT setup.exe to: $OdtDir"
-$extractProc = Start-Process `
-  -FilePath $OdtPkg `
-  -ArgumentList "/quiet /extract:$OdtDir" `
-  -NoNewWindow `
-  -PassThru `
-  -Wait
-
-if ($extractProc.ExitCode -ne 0)
-{
-  throw "ODT extraction failed with exit code $($extractProc.ExitCode)."
-}
-
-$SetupExe = Join-Path $OdtDir "setup.exe"
-if (-not (Test-Path $SetupExe))
-{
-  throw "setup.exe not found after ODT extraction. Expected at: $SetupExe"
-}
-
-# --- Step 3: Run setup.exe /configure (fully silent, no UI) ---
+# --- Step 2: Run setup.exe /configure (fully silent, no UI) ---
 # IMPORTANT: Use -WorkingDirectory $OdtDir and pass just the bare filename "OfficeCustom.xml".
 # This is the most reliable fix for error 0-2048 — setup.exe looks for the XML
 # relative to its working directory, so no path/quoting ambiguity is possible.
@@ -149,10 +148,9 @@ $Proc = Start-Process `
 $exitCode = $Proc.ExitCode
 Write-Output "Office setup exited with code: $exitCode"
 
-# --- Step 4: Cleanup on success ---
+# --- Step 3: Cleanup on success ---
 if ($exitCode -eq 0)
 {
-  Remove-Item $OdtPkg -Force -ErrorAction SilentlyContinue
   Write-Output "Office 365 installed successfully."
 } else
 {

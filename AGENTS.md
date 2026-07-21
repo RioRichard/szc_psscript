@@ -8,18 +8,20 @@ This repository contains PowerShell scripts designed to automate the installatio
 
 ## 🚀 How to Run
 
-To run the main installation workflow, execute the entrypoint script in an **elevated (Administrator) PowerShell session**:
+To run the main installation workflow, execute the entrypoint script in PowerShell:
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
 & ".\main.ps1"
 ```
 
+**Note:** `main.ps1` automatically detects if it is not running as Administrator and re-launches itself elevated via a UAC prompt. You do not need to manually right-click "Run as Administrator".
+
 ---
 
 ## 📁 Repository Structure
 
-*   `main.ps1`: The main entrypoint script. Imports and launches the TUI (`Start-Tui`).
+*   `main.ps1`: The main entrypoint script. Checks for Administrator privileges (auto-elevates via UAC if needed), then imports and launches the TUI (`Start-Tui`).
 *   `src/`: Core script directory:
     *   `tui/`: Directory containing the split Text User Interface:
         *   `tui.ps1`: The TUI coordinator entrypoint.
@@ -35,7 +37,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `install_app.ps1`: Generic helper function (`Install-App`) to install applications via `winget` or custom setup scripts.
         *   `install_commonapp.ps1`: Loads `apps.json` and iterates installs. *(Currently superseded by TUI coordinator — may be removed in future.)*
         *   `office_install/`: Files to deploy Microsoft 365:
-            *   `install.ps1`: Custom script to download the Office Click-to-Run bootstrapper and configure it.
+            *   `install.ps1`: Custom script to download `setup.exe` from the Office CDN and run `/configure`.
             *   `OfficeCustom.xml`: Custom ODT configuration file.
         *   `kes_install/`: Files to deploy Kaspersky Endpoint Security:
             *   `install.ps1`: Custom script to download and install Kaspersky silently.
@@ -58,23 +60,21 @@ The `Install-App` function handles generic installations.
     ```
 
 ### 2. Microsoft Office Deployment (`src/app/office_install/`)
-*   Uses the Office Deployment Tool (ODT).
+*   Uses the Office Deployment Tool (ODT) `setup.exe`.
 *   **XML Settings:** `OfficeCustom.xml` uses `O365BusinessRetail` (correct Product ID for Microsoft 365 Business Standard/Premium), `en-us` + `vi-vn` languages, excludes Teams, `Display Level="None" AcceptEULA="TRUE"` for fully silent install. Also includes `FORCEAPPSHUTDOWN` to close conflicting Office processes.
 *   **Script behavior:** `install.ps1`:
-    1. Removes any leftover partial/corrupt ODT download from a previous attempt.
-    2. Downloads the **ODT self-extracting package** from `https://go.microsoft.com/fwlink/p/?LinkID=626065` using a two-method strategy:
-       - **Method 1:** `Invoke-WebRequest` with `$ProgressPreference = 'SilentlyContinue'` and `-MaximumRedirection 10`. If the downloaded file is missing or < 100KB, falls back to Method 2.
-       - **Method 2:** `System.Net.WebClient.DownloadFile()`, which handles fwlink redirects more reliably.
-    3. Validates the download: checks if the file is < 500KB (real ODT is ~3.4 MB) and sniffs the file header for HTML content (redirect/error page detection). Throws a descriptive error if validation fails.
-    4. Extracts `setup.exe` from it using `/quiet /extract:"<dir>"`.
-    5. Copies `OfficeCustom.xml` to the cache dir (space-free path).
-    6. Runs `setup.exe /configure "<xml path>"` for a fully silent, unattended install.
-    7. Cleans up on success; leaves files for debugging on failure.
-*   **Why not `OfficeSetup.exe`:** The consumer bootstrapper from the Microsoft 365 portal does NOT support `/configure <xml>`. It is UI-only and silently ignores the argument, giving a misleading success exit code. Always use `setup.exe` from the ODT package.
-*   **Download gotchas (fwlink redirect):** The `go.microsoft.com/fwlink` URL is a redirector. `Invoke-WebRequest` can fail to follow the redirect (downloading an HTML page instead of the binary) or the progress bar can stall/corrupt the download stream. The script now disables `$ProgressPreference`, adds `-MaximumRedirection 10`, and falls back to `System.Net.WebClient` if Method 1 fails. It also sniffs the downloaded file for HTML content to give a clear error message.
-*   **Path quoting:** `Start-Process -ArgumentList` joins array elements with spaces — paths are wrapped in escaped quotes `` `"$path`" `` and the XML is also copied to a space-free cache dir as double protection.
+    1. Removes any leftover partial/corrupt download from a previous attempt.
+    2. Downloads `setup.exe` directly from the **Office CDN** (`https://officecdn.microsoft.com/pr/wsus/setup.exe`) using a three-method fallback strategy:
+       - **Method 1:** `curl.exe -L` (ships with Windows 10 1803+ / Windows 11). Most reliable, handles redirects natively, retries 3 times.
+       - **Method 2:** `Invoke-WebRequest` with `$ProgressPreference = 'SilentlyContinue'` and `-MaximumRedirection 10`.
+       - **Method 3:** `System.Net.WebClient.DownloadFile()`.
+    3. Validates the download: checks if the file is < 500KB and sniffs the file header for HTML content (error page detection). Throws a descriptive error if validation fails.
+    4. Copies `OfficeCustom.xml` to the same directory as `setup.exe`.
+    5. Runs `setup.exe /configure OfficeCustom.xml` for a fully silent, unattended install (uses `-WorkingDirectory` to avoid path issues).
+*   **Why Office CDN, not fwlink:** The old fwlink URL (`go.microsoft.com/fwlink/p/?LinkID=626065`) redirects to the **Microsoft Download Center HTML page** (not a direct binary). Both `Invoke-WebRequest` and `WebClient` download the HTML page instead of the executable, resulting in a ~5KB file that fails validation. The Office CDN URL (`officecdn.microsoft.com/pr/wsus/setup.exe`) is a **direct binary link** — no redirects, no HTML pages.
+*   **Why not `OfficeSetup.exe`:** The consumer bootstrapper from the Microsoft 365 portal does NOT support `/configure <xml>`. It is UI-only and silently ignores the argument, giving a misleading success exit code. Always use `setup.exe` from the ODT / Office CDN.
 *   **Logs:** If the installer fails, ODT writes detailed logs to `%TEMP%`. Check those for the root cause.
-*   **Status:** 🧪 Testing — download reliability fixes applied, pending user verification on Windows.
+*   **Status:** 🧪 Testing — switched from fwlink to Office CDN direct URL, pending user verification on Windows.
 
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
 *   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
@@ -129,7 +129,8 @@ The automation suite is organized into 4 distinct phases:
     *   *Incorrect:* `Write-Error "Reason: ${$_.Exception.Message}"`
 *   **`$Custom` is a `[String[]]` array, not a string:** `Install-App`'s `$Custom` parameter is typed `[String[]]`. Splat it with `@Command` (not `$Command`) when calling the interpreter. Do NOT pass it to `[String]::IsNullOrWhiteSpace()` — use `$Custom.Count -gt 0` to check for content.
 *   **`Install-App` must NOT swallow errors:** The function must let exceptions propagate to the caller so the TUI's `try/catch` in `Start-Deployment` can correctly mark installs as FAILED. Never wrap the entire function body in a `try/catch` that only writes a non-terminating error.
-*   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges.
+*   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges. `main.ps1` auto-elevates via UAC if not already running as Administrator — do NOT remove this check.
+*   **Do NOT use the fwlink URL for ODT:** `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to an HTML Download Center page, not a binary. Always use the Office CDN direct URL `https://officecdn.microsoft.com/pr/wsus/setup.exe`.
 *   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside Ultrabox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
 
 ---
@@ -138,10 +139,11 @@ The automation suite is organized into 4 distinct phases:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Office 365 installer | 🧪 Testing | Two-method download (Invoke-WebRequest → WebClient fallback), disabled ProgressPreference, MaximumRedirection 10, HTML sniffing for corrupt/redirect pages, lowered size threshold to 500KB. Pending user verification. |
+| Office 365 installer | 🧪 Testing | Switched from fwlink (HTML redirect page) to Office CDN direct URL (`officecdn.microsoft.com/pr/wsus/setup.exe`). Three-method download fallback (curl.exe → Invoke-WebRequest → WebClient). HTML sniffing for corrupt downloads. Pending user verification. |
+| Auto-elevation in main.ps1 | ✅ Done | `main.ps1` checks for Administrator role and re-launches elevated via `-Verb RunAs` UAC prompt if needed. |
 | Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
-| Wrong Office installer URL | ✅ Fixed | Old URL (linkid=2264705) downloaded consumer `OfficeSetup.exe` which ignores `/configure`. Now uses ODT package (LinkID=626065) |
+| fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers) |
