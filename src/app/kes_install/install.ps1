@@ -82,14 +82,14 @@ if (-not $realInstaller)
 
 Write-Host "Found installer: $($realInstaller.FullName)"
 
-# --- Step 6: Run the real installer silently ---
-Write-Host "Running Kaspersky installation silently..."
+# --- Step 6: Run installer with visible progress UI ---
+Write-Host "Starting Kaspersky installation (showing progress wizard)..."
 
 if ($realInstaller.Extension -eq ".msi")
 {
   $installProc = Start-Process `
     -FilePath "msiexec.exe" `
-    -ArgumentList @("/i", "`"$($realInstaller.FullName)`"", "EULA=1", "PRIVACYPOLICY=1", "/qn") `
+    -ArgumentList @("/i", "`"$($realInstaller.FullName)`"", "EULA=1", "PRIVACYPOLICY=1", "/qb") `
     -NoNewWindow `
     -PassThru `
     -Wait
@@ -98,7 +98,7 @@ else
 {
   $installProc = Start-Process `
     -FilePath $realInstaller.FullName `
-    -ArgumentList @("/s", "/pEULA=1", "/pPRIVACYPOLICY=1") `
+    -ArgumentList @("/pEULA=1", "/pPRIVACYPOLICY=1") `
     -NoNewWindow `
     -PassThru `
     -Wait

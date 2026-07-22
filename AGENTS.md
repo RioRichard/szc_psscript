@@ -79,7 +79,7 @@ The `Install-App` function handles generic installations.
 
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
 *   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
-*   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents. The real setup executable or MSI package is then found inside the extracted folder and run with appropriate silent flags (`/s /pEULA=1 /pPRIVACYPOLICY=1` for EXE, or `/qn EULA=1 PRIVACYPOLICY=1` for MSI).
+*   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents. The real setup executable or MSI package is then found inside the extracted folder and run with a visible progress wizard (`/qb EULA=1 PRIVACYPOLICY=1` for MSI, or `/pEULA=1 /pPRIVACYPOLICY=1` without `/s` for EXE).
 *   **Prerequisite:** **7-Zip must be installed before KES.** This is enforced via the `"dependencies": ["7zip"]` field in `apps.json`. The TUI's `Start-Deployment` function automatically adds missing dependencies and reorders the install list so dependencies install first. Do not remove this dependency.
 *   **Extracted files location:** `C:\ProgramData\SZC\InstallCache\kes_extracted\`. Left in place on failure for debugging.
 *   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
