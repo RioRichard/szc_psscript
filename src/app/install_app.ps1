@@ -1,3 +1,7 @@
+# Load download helper
+$_downloadHelper = Join-Path $PSScriptRoot "download_helper.ps1"
+if (Test-Path $_downloadHelper) { . $_downloadHelper }
+
 function Install-App
 {
   [CmdletBinding()]

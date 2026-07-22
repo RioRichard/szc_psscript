@@ -34,13 +34,14 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `printers.json`: Printer definitions (id, name, url, port, driver, urlDriver).
         *   `departments.json`: Department profiles — each references apps and printers by `id`.
     *   `app/`: Directory containing application installation logic:
-        *   `install_app.ps1`: Generic helper function (`Install-App`) to install applications via `winget` or custom setup scripts.
+        *   `install_app.ps1`: Generic helper function (`Install-App`) to install applications via `winget` or custom setup scripts. Dot-sources `download_helper.ps1`.
+        *   `download_helper.ps1`: Standalone multi-connection parallel downloader (`Start-MultiDownload`) using HTTP Range requests, PowerShell runspaces, real-time `Write-Progress` monitoring (MB/s speed & % completion), and BITS/WebClient fallbacks.
         *   `install_commonapp.ps1`: Loads `apps.json` and iterates installs. *(Currently superseded by TUI coordinator — may be removed in future.)*
         *   `office_install/`: Files to deploy Microsoft 365:
             *   `install.ps1`: Custom script to download `setup.exe` from the Office CDN and run `/configure`.
             *   `OfficeCustom.xml`: Custom ODT configuration file.
         *   `kes_install/`: Files to deploy Kaspersky Endpoint Security:
-            *   `install.ps1`: Custom script to download and install Kaspersky silently.
+            *   `install.ps1`: Custom script to download and install Kaspersky silently using `Start-MultiDownload`.
     *   `printer/`: Directory containing printer installation logic:
         *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) to add printer ports, download/install drivers, and configure printers.
         *   `printers_dn.ps1`: Defines local/network printer profiles and triggers installation.
