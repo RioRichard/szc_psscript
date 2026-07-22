@@ -54,26 +54,46 @@ $realInstaller = Get-ChildItem -Path $KesDir -Filter "setup*.exe" -Recurse -Erro
 
 if (-not $realInstaller)
 {
-  # Fallback: any .exe that isn't the archive itself
+  # Fallback: maybe it's an MSI installer instead
+  $realInstaller = Get-ChildItem -Path $KesDir -Filter "*.msi" -Recurse -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+}
+
+if (-not $realInstaller)
+{
+  # Fallback 2: any .exe that isn't the archive itself
   $realInstaller = Get-ChildItem -Path $KesDir -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue |
     Select-Object -First 1
 }
 
 if (-not $realInstaller)
 {
-  throw "Could not find a setup executable inside the extracted KES package at: $KesDir"
+  throw "Could not find a setup executable or MSI package inside the extracted KES package at: $KesDir"
 }
 
 Write-Host "Found installer: $($realInstaller.FullName)"
 
 # --- Step 6: Run the real installer silently ---
 Write-Host "Running Kaspersky installation silently..."
-$installProc = Start-Process `
-  -FilePath $realInstaller.FullName `
-  -ArgumentList @("/s", "/pEULA=1", "/pPRIVACYPOLICY=1") `
-  -NoNewWindow `
-  -PassThru `
-  -Wait
+
+if ($realInstaller.Extension -eq ".msi")
+{
+  $installProc = Start-Process `
+    -FilePath "msiexec.exe" `
+    -ArgumentList @("/i", "`"$($realInstaller.FullName)`"", "EULA=1", "PRIVACYPOLICY=1", "/qn") `
+    -NoNewWindow `
+    -PassThru `
+    -Wait
+}
+else
+{
+  $installProc = Start-Process `
+    -FilePath $realInstaller.FullName `
+    -ArgumentList @("/s", "/pEULA=1", "/pPRIVACYPOLICY=1") `
+    -NoNewWindow `
+    -PassThru `
+    -Wait
+}
 
 $exitCode = $installProc.ExitCode
 Write-Host "KES installer exited with code: $exitCode"
