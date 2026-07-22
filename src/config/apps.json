@@ -29,7 +29,8 @@
     "name": "Kaspersky Endpoint Security",
     "package": "",
     "packageManager": "powershell",
-    "customScript": "app/kes_install/install.ps1"
+    "customScript": "app/kes_install/install.ps1",
+    "dependencies": ["7zip"]
   },
   {
     "id": "onedrive",

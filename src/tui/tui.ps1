@@ -16,12 +16,17 @@ $CommonApps = foreach ($app in $_apps) {
   if ($app.customScript) {
     $customScript = Join-Path $PSScriptRoot "../$($app.customScript)"
   }
+  $deps = @()
+  if ($app.dependencies) {
+    $deps = @($app.dependencies)
+  }
   @{
     Id             = $app.id
     Name           = $app.name
     Package        = $app.package
     PackageManager = $app.packageManager
     CustomScript   = $customScript
+    Dependencies   = $deps
   }
 }
 
@@ -152,6 +157,56 @@ function Start-Deployment
     Write-Host "  No applications selected for installation." -ForegroundColor Yellow
     Show-PressEnterToContinue
     return
+  }
+
+  # --- Resolve dependencies: auto-add missing deps and reorder ---
+  $selectedIds = [System.Collections.Generic.HashSet[string]]::new()
+  foreach ($app in $appsToInstall) { $selectedIds.Add($app.Id) | Out-Null }
+
+  # Find all missing dependencies and add them
+  $depsAdded = @()
+  foreach ($app in $appsToInstall)
+  {
+    foreach ($depId in $app.Dependencies)
+    {
+      if (-not $selectedIds.Contains($depId))
+      {
+        $selectedIds.Add($depId) | Out-Null
+        $depsAdded += $depId
+      }
+    }
+  }
+
+  # Rebuild the install list: dependencies first, then the rest in original order
+  if ($depsAdded.Count -gt 0)
+  {
+    $depApps = $CommonApps | Where-Object { $depsAdded -contains $_.Id }
+    $appsToInstall = @($depApps) + @($appsToInstall)
+  }
+  else
+  {
+    # Even if no deps were missing, reorder so dependencies come before dependents
+    $orderedList = [System.Collections.Generic.List[hashtable]]::new()
+    $addedIds = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($app in $appsToInstall)
+    {
+      # Add any dependencies of this app first (if not already added)
+      foreach ($depId in $app.Dependencies)
+      {
+        if (-not $addedIds.Contains($depId))
+        {
+          $depApp = $CommonApps | Where-Object { $_.Id -eq $depId } | Select-Object -First 1
+          if ($depApp) { $orderedList.Add($depApp); $addedIds.Add($depId) | Out-Null }
+        }
+      }
+      # Add this app (if not already added as someone else's dependency)
+      if (-not $addedIds.Contains($app.Id))
+      {
+        $orderedList.Add($app)
+        $addedIds.Add($app.Id) | Out-Null
+      }
+    }
+    $appsToInstall = $orderedList.ToArray()
   }
 
   # --- Confirm screen ---

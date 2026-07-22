@@ -79,7 +79,7 @@ The `Install-App` function handles generic installations.
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
 *   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
 *   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents. The real setup executable or MSI package is then found inside the extracted folder and run with appropriate silent flags (`/s /pEULA=1 /pPRIVACYPOLICY=1` for EXE, or `/qn EULA=1 PRIVACYPOLICY=1` for MSI).
-*   **Prerequisite:** **7-Zip must be installed before KES.** All department profiles in `departments.json` are ordered so `7zip` comes before `kes`. Do not reorder them.
+*   **Prerequisite:** **7-Zip must be installed before KES.** This is enforced via the `"dependencies": ["7zip"]` field in `apps.json`. The TUI's `Start-Deployment` function automatically adds missing dependencies and reorders the install list so dependencies install first. Do not remove this dependency.
 *   **Extracted files location:** `C:\ProgramData\SZC\InstallCache\kes_extracted\`. Left in place on failure for debugging.
 *   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
 
@@ -102,7 +102,8 @@ The `Install-App` function handles generic installations.
     2. User can optionally **customize** the app/printer selection manually.
     3. User can run **Collect System Information**, which gathers OS, CPU, RAM, disk, IP, MAC info and saves a report to `C:\ProgramData\SZC\`.
     4. User triggers **Start Deployment** to install selected apps and printers.
-*   **Adding a new department:** Add a new entry to `src/config/departments.json` with `id`, `name`, `apps` (list of app ids from `apps.json`), and `printers` (list of printer ids from `printers.json`). No code changes needed — TUI picks it up automatically.
+*   **Adding a new department:** Add a new entry to `src/config/departments.json` with `id`, `name`, `apps` (list of app ids from `apps.json`), and `printers` (list of printer ids from `printers.json`). No code changes needed -- TUI picks it up automatically.
+*   **App Dependencies:** Apps in `apps.json` can declare a `"dependencies"` array listing other app `id`s that must be installed first (e.g., KES depends on 7-Zip). At deployment time, `Start-Deployment` automatically adds any missing dependencies to the install list and reorders so dependencies install before dependents. This is purely data-driven -- adding a dependency only requires editing `apps.json`.
 *   **Empty printer list:** If `printers.json` has no entries, the printer selection screen shows a friendly "No printers configured yet" message instead of an empty menu.
 
 ---
@@ -142,7 +143,7 @@ The automation suite is organized into 4 distinct phases:
 |------|--------|-------|
 | Office 365 installer | ✅ Fixed | Office CDN direct URL, three-method download fallback (curl.exe -> Invoke-WebRequest -> WebClient). Size threshold lowered to 10KB (CDN setup.exe is a small bootstrapper). HTML sniffing. All Unicode chars removed from script. Display Level set to "Full" to show progress UI. |
 | Auto-elevation in main.ps1 | ✅ Done | `main.ps1` checks for Administrator role and re-launches elevated via `-Verb RunAs` UAC prompt if needed. |
-| Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently. 7-Zip must be installed first. Pending user verification. |
+| Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently (EXE or MSI). 7-Zip dependency now enforced via `apps.json` dependencies field. Pending user verification. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
