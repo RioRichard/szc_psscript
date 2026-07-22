@@ -10,18 +10,174 @@ New-Item -ItemType Directory -Force -Path $KesDir    | Out-Null
 $DownloadedExe = Join-Path $CacheDir "keswin_setup.exe"
 $ArchiveAs7z   = Join-Path $CacheDir "keswin_setup.7z"
 
-# Ensure download helper is loaded
-if (-not (Get-Command Start-MultiDownload -ErrorAction SilentlyContinue))
-{
-  $_thisDir = Split-Path $MyInvocation.MyCommand.Path -Parent
-  $_helperPath = Join-Path $_thisDir "..\download_helper.ps1"
-  if (Test-Path $_helperPath) { . $_helperPath }
+# Remove leftover download if present
+if (Test-Path $DownloadedExe)
+{ Remove-Item $DownloadedExe -Force 
 }
 
-# Remove leftover download if present
-if (Test-Path $DownloadedExe) { Remove-Item $DownloadedExe -Force }
+# --- Multi-connection download function ---
+# Splits the file into chunks and downloads them in parallel using HTTP Range
+# requests and PowerShell runspaces. Falls back to single-connection if the
+# server does not support Range requests.
+function Download-MultiConnection
+{
+  param(
+    [string]$SourceUrl,
+    [string]$OutFile,
+    [int]$Connections = 8
+  )
 
-Start-MultiDownload -Url $Url -OutFile $DownloadedExe -Connections 8 -ActivityName "Downloading Kaspersky Endpoint Security"
+  # Step 1: HEAD request to get file size and check Range support
+  Write-Host "  Checking server..."
+  $headReq = [System.Net.HttpWebRequest]::Create($SourceUrl)
+  $headReq.Method = "HEAD"
+  $headReq.Timeout = 30000
+  try
+  {
+    $headResp = $headReq.GetResponse()
+    $fileSize = $headResp.ContentLength
+    $acceptRanges = $headResp.Headers["Accept-Ranges"]
+    $headResp.Close()
+  } catch
+  {
+    Write-Host "  HEAD request failed, using single connection." -ForegroundColor Yellow
+    $fileSize = -1
+  }
+
+  # Fall back to single connection if Range not supported or file size unknown
+  if ($fileSize -le 0 -or $acceptRanges -ne "bytes")
+  {
+    Write-Host "  Server does not support multi-connection. Downloading with BITS..."
+    try
+    {
+      Start-BitsTransfer -Source $SourceUrl -Destination $OutFile -ErrorAction Stop
+      return
+    } catch
+    {
+      Write-Host "  BITS failed, trying WebClient..." -ForegroundColor Yellow
+      $wc = New-Object System.Net.WebClient
+      try
+      { $wc.DownloadFile($SourceUrl, $OutFile) 
+      } finally
+      { $wc.Dispose() 
+      }
+      return
+    }
+  }
+
+  $sizeMB = [math]::Round($fileSize / 1MB, 1)
+  Write-Host "  File size: $sizeMB MB -- using $Connections parallel connections..."
+
+  # Step 2: Calculate chunk byte ranges
+  $chunkSize = [math]::Ceiling($fileSize / $Connections)
+  $chunks = @()
+  for ($i = 0; $i -lt $Connections; $i++)
+  {
+    $start = [long]($i * $chunkSize)
+    $end   = [math]::Min([long](($i + 1) * $chunkSize - 1), [long]($fileSize - 1))
+    $partFile = "$OutFile.part$i"
+    $chunks += @{ Index = $i; Start = $start; End = $end; File = $partFile }
+  }
+
+  # Step 3: Download each chunk in parallel using runspaces
+  $scriptBlock = {
+    param([string]$url, [long]$rangeStart, [long]$rangeEnd, [string]$partFile)
+    $req = [System.Net.HttpWebRequest]::Create($url)
+    $req.AddRange([long]$rangeStart, [long]$rangeEnd)
+    $req.Timeout = 600000  # 10 minute timeout per chunk
+    $resp = $req.GetResponse()
+    $stream = $resp.GetResponseStream()
+    $fs = [System.IO.File]::Create($partFile)
+    try
+    {
+      $buffer = New-Object byte[] 131072  # 128KB buffer
+      else  {
+        $fs.Write($buffer, 0, $bytesRead)
+      }
+    } finally
+    {
+      $fs.Close()
+      $stream.Close()
+      $resp.Close()
+    }
+  }
+
+  $pool = [runspacefactory]::CreateRunspacePool(1, $Connections)
+  $pool.Open()
+
+  $handles = @()
+  foreach ($chunk in $chunks)
+  {
+    $ps = [powershell]::Create()
+    $ps.RunspacePool = $pool
+    $ps.AddScript($scriptBlock) | Out-Null
+    $ps.AddArgument($SourceUrl) | Out-Null
+    $ps.AddArgument($chunk.Start) | Out-Null
+    $ps.AddArgument($chunk.End) | Out-Null
+    $ps.AddArgument($chunk.File) | Out-Null
+    $asyncResult = $ps.BeginInvoke()
+    $handles += @{ PS = $ps; Async = $asyncResult; Chunk = $chunk }
+  }
+
+  # Wait for all chunks and collect errors
+  $errors = @()
+  foreach ($h in $handles)
+  {
+    try
+    {
+      $h.PS.EndInvoke($h.Async)
+    } catch
+    {
+      $errors += "Chunk $($h.Chunk.Index) failed: $($_.Exception.Message)"
+    }
+    $h.PS.Dispose()
+  }
+  $pool.Close()
+  $pool.Dispose()
+
+  if ($errors.Count -gt 0)
+  {
+    # Clean up partial files
+    foreach ($chunk in $chunks)
+    {
+      if (Test-Path $chunk.File)
+      { Remove-Item $chunk.File -Force 
+      }
+    }
+    throw "Multi-connection download failed: $($errors -join '; ')"
+  }
+
+  # Step 4: Merge chunks into the final file
+  Write-Host "  Merging $($chunks.Count) parts..."
+  $outStream = [System.IO.File]::Create($OutFile)
+  try
+  {
+    foreach ($chunk in ($chunks | Sort-Object { $_.Index }))
+    {
+      $partStream = [System.IO.File]::OpenRead($chunk.File)
+      try
+      { $partStream.CopyTo($outStream) 
+      } finally
+      { $partStream.Close() 
+      }
+    }
+  } finally
+  {
+    $outStream.Close()
+  }
+
+  # Clean up part files
+  foreach ($chunk in $chunks)
+  {
+    Remove-Item $chunk.File -Force -ErrorAction SilentlyContinue
+  }
+
+  $finalSize = (Get-Item $OutFile).Length
+  Write-Host "  Download complete: $([math]::Round($finalSize / 1MB, 1)) MB"
+}
+
+Write-Host "Downloading Kaspersky Endpoint Security..."
+Download-MultiConnection -SourceUrl $Url -OutFile $DownloadedExe -Connections 8
 
 # --- Step 2: Rename .exe -> .7z so 7-Zip can extract it ---
 Copy-Item -Path $DownloadedExe -Destination $ArchiveAs7z -Force
@@ -88,8 +244,7 @@ if ($realInstaller.Extension -eq ".msi")
     -NoNewWindow `
     -PassThru `
     -Wait
-}
-else
+} else
 {
   $installProc = Start-Process `
     -FilePath $realInstaller.FullName `
@@ -109,6 +264,35 @@ if ($exitCode -eq 0)
   Remove-Item $ArchiveAs7z   -Force -ErrorAction SilentlyContinue
   Remove-Item $KesDir        -Recurse -Force -ErrorAction SilentlyContinue
   Write-Host "Kaspersky Endpoint Security installed successfully."
+} else
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
+{
+  Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
+  throw "KES installation failed with exit code $exitCode."
+}
 } else
 {
   Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
