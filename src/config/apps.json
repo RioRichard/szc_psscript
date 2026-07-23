@@ -6,6 +6,12 @@
     "packageManager": "winget"
   },
   {
+    "id": "stirlingPdf",
+    "name": "Stirling PDF",
+    "package": "StrilingTools.StirlingPDF",
+    "packageManager": "winget"
+  },
+  {
     "id": "viber",
     "name": "Viber",
     "package": "Rakuten.Viber",
@@ -30,7 +36,9 @@
     "package": "",
     "packageManager": "powershell",
     "customScript": "app/kes_install/install.ps1",
-    "dependencies": ["7zip"]
+    "dependencies": [
+      "7zip"
+    ]
   },
   {
     "id": "onedrive",
@@ -67,5 +75,42 @@
     "name": "VCRedist (x86)",
     "package": "Microsoft.VCRedist.2015+.x86",
     "packageManager": "winget"
+  },
+  {
+    "id": "vscode",
+    "name": "Visual Studio Code",
+    "package": "Microsoft.VisualStudioCode",
+    "packageManager": "winget"
+  },
+  {
+    "id": "python",
+    "name": "Python 3",
+    "package": "Python.Python.3.12",
+    "packageManager": "winget"
+  },
+  {
+    "id": "nodejs",
+    "name": "Node.js LTS",
+    "package": "OpenJS.NodeJS.LTS",
+    "packageManager": "winget"
+  },
+  {
+    "id": "qgis",
+    "name": "QGIS",
+    "package": "OSGeo.QGIS",
+    "packageManager": "winget"
+  },
+  {
+    "id": "zwcad",
+    "name": "ZWCAD",
+    "package": "ZWSoft.ZWCAD",
+    "packageManager": "winget"
+  },
+  {
+    "id": "autocad",
+    "name": "AutoCAD LT",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/autocad_install/install.ps1"
   }
 ]

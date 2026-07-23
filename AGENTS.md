@@ -42,6 +42,8 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
             *   `OfficeCustom.xml`: Custom ODT configuration file.
         *   `kes_install/`: Files to deploy Kaspersky Endpoint Security:
             *   `install.ps1`: Custom script to download and install Kaspersky silently using `Start-MultiDownload`.
+        *   `autocad_install/`: Files to deploy AutoCAD:
+            *   `install.ps1`: Custom script to run silent installation if `C:\ProgramData\SZC\InstallCache\autocad\Setup.exe` exists, or skip gracefully with an informative message if absent.
     *   `printer/`: Directory containing printer installation logic:
         *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) to add printer ports, download/install drivers, and configure printers.
         *   `printers_dn.ps1`: Defines local/network printer profiles and triggers installation.
@@ -85,7 +87,7 @@ The `Install-App` function handles generic installations.
     *   **If `.exe` is found:** Runs `$installer.FullName` with `@("/s", "/pEULA=1", "/pPRIVACYPOLICY=1", "/pKSN=0", "/v""/passive EULA=1 PRIVACYPOLICY=1 KSN=0""")`.
 *   **Prerequisite:** **7-Zip must be installed before KES.** This is enforced via the `"dependencies": ["7zip"]` field in `apps.json`. The TUI's `Start-Deployment` function automatically adds missing dependencies and reorders the install list so dependencies install first. Do not remove this dependency.
 *   **Extracted files location:** `C:\ProgramData\SZC\InstallCache\kes_extracted\`. Left in place on failure for debugging.
-*   **Status:** 🧪 Testing — updated to prioritize `.msi` directly with `/passive` unattended progress bar and auto-accepted EULA/Privacy Policy flags; pending user verification on VirtualBox Windows.
+*   **Status:** ✅ Working — extracts with 7-Zip CLI and runs `.msi` directly with `/passive EULA=1 PRIVACYPOLICY=1 KSN=0` for an unattended installation with progress bar.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
 *   **Automatic discovery:** If no port/driver is specified, it uses WS-Discovery/TCP-IP discovery to install printers automatically.
@@ -147,9 +149,10 @@ The automation suite is organized into 4 distinct phases:
 |------|--------|-------|
 | Office 365 installer | ✅ Fixed | Office CDN direct URL, three-method download fallback (curl.exe -> Invoke-WebRequest -> WebClient). Size threshold lowered to 10KB (CDN setup.exe is a small bootstrapper). HTML sniffing. All Unicode chars removed from script. Display Level set to "Full" to show progress UI. |
 | Auto-elevation in main.ps1 | ✅ Done | `main.ps1` checks for Administrator role and re-launches elevated via `-Verb RunAs` UAC prompt if needed. |
-| Kaspersky installer | 🧪 Testing | Updated installer search to prioritize `.msi` directly with `/passive EULA=1 PRIVACYPOLICY=1 KSN=0` for unattended installation with progress bar (no user interaction required). Fallback to setup.exe with silent/passive switches. Pending user verification on VirtualBox. |
+| Kaspersky installer | ✅ Working | Prioritizes `.msi` directly with `/passive EULA=1 PRIVACYPOLICY=1 KSN=0` for unattended installation with progress bar (no user interaction required). Verified working on VirtualBox. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers). Temporarily removed from Start-Deployment script entirely as it's on hold. |
+| Office App Expansion | 🧪 Ready for VirtualBox Testing | Added `vscode`, `python`, `nodejs`, `qgis`, `zwcad`, and `autocad` (AutoCAD LT via `src/app/autocad_install/install.ps1`) to `apps.json`. Ready for verification on Windows 11. |
