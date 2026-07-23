@@ -14,11 +14,15 @@ if (-not (Get-Command Start-MultiDownload -ErrorAction SilentlyContinue))
 {
   $_thisDir = Split-Path $MyInvocation.MyCommand.Path -Parent
   $_helperPath = Join-Path $_thisDir "..\download_helper.ps1"
-  if (Test-Path $_helperPath) { . $_helperPath }
+  if (Test-Path $_helperPath)
+  { . $_helperPath 
+  }
 }
 
 # Remove leftover download if present
-if (Test-Path $DownloadedExe) { Remove-Item $DownloadedExe -Force -ErrorAction SilentlyContinue }
+if (Test-Path $DownloadedExe)
+{ Remove-Item $DownloadedExe -Force -ErrorAction SilentlyContinue 
+}
 
 Write-Host "Downloading Kaspersky Endpoint Security..."
 Start-MultiDownload -Url $Url -OutFile $DownloadedExe -Connections 8 -ActivityName "Downloading Kaspersky Endpoint Security"
@@ -57,20 +61,20 @@ if ($extractProc.ExitCode -ne 0)
   throw "7-Zip extraction failed with exit code $($extractProc.ExitCode)."
 }
 
-# --- Step 5: Find the real setup executable inside the extracted folder ---
-$realInstaller = Get-ChildItem -Path $KesDir -Filter "setup*.exe" -Recurse -ErrorAction SilentlyContinue |
+# --- Step 5: Find installer inside the extracted folder (prioritize MSI) ---
+$realInstaller = Get-ChildItem -Path $KesDir -Filter "*.msi" -Recurse -ErrorAction SilentlyContinue |
   Select-Object -First 1
 
 if (-not $realInstaller)
 {
-  # Fallback: maybe it's an MSI installer instead
-  $realInstaller = Get-ChildItem -Path $KesDir -Filter "*.msi" -Recurse -ErrorAction SilentlyContinue |
+  # Fallback 1: setup.exe executable
+  $realInstaller = Get-ChildItem -Path $KesDir -Filter "*setup*.exe" -Recurse -ErrorAction SilentlyContinue |
     Select-Object -First 1
 }
 
 if (-not $realInstaller)
 {
-  # Fallback 2: any .exe that isn't the archive itself
+  # Fallback 2: any .exe in extracted folder
   $realInstaller = Get-ChildItem -Path $KesDir -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue |
     Select-Object -First 1
 }
@@ -82,23 +86,22 @@ if (-not $realInstaller)
 
 Write-Host "Found installer: $($realInstaller.FullName)"
 
-# --- Step 6: Run installer with visible progress UI ---
-Write-Host "Starting Kaspersky installation (showing progress wizard)..."
-
+# --- Step 6: Run installer ---
 if ($realInstaller.Extension -eq ".msi")
 {
+  Write-Host "Running Kaspersky MSI installation (unattended, progress bar only)..."
   $installProc = Start-Process `
     -FilePath "msiexec.exe" `
-    -ArgumentList @("/i", "`"$($realInstaller.FullName)`"", "EULA=1", "PRIVACYPOLICY=1", "/qb") `
+    -ArgumentList @("/i", "`"$($realInstaller.FullName)`"", "/passive", "EULA=1", "PRIVACYPOLICY=1", "KSN=0") `
     -NoNewWindow `
     -PassThru `
     -Wait
-}
-else
+} else
 {
+  Write-Host "Running Kaspersky EXE installation (unattended, progress bar parameters)..."
   $installProc = Start-Process `
     -FilePath $realInstaller.FullName `
-    -ArgumentList @("/pEULA=1", "/pPRIVACYPOLICY=1") `
+    -ArgumentList @("/s", "/pEULA=1", "/pPRIVACYPOLICY=1", "/pKSN=0", "/v`"/passive EULA=1 PRIVACYPOLICY=1 KSN=0`"") `
     -NoNewWindow `
     -PassThru `
     -Wait
@@ -114,8 +117,7 @@ if ($exitCode -eq 0)
   Remove-Item $ArchiveAs7z   -Force -ErrorAction SilentlyContinue
   Remove-Item $KesDir        -Recurse -Force -ErrorAction SilentlyContinue
   Write-Host "Kaspersky Endpoint Security installed successfully."
-}
-else
+} else
 {
   Write-Host "Files left in: $CacheDir and $KesDir (for retry/debugging)"
   throw "KES installation failed with exit code $exitCode."

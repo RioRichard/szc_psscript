@@ -79,10 +79,13 @@ The `Install-App` function handles generic installations.
 
 ### 3. Kaspersky Deployment (`src/app/kes_install/`)
 *   The Kaspersky installer (`keswin_*.exe`) is a Nullsoft Installer (NSIS) self-extracting archive that does **not** accept standard silent flags directly.
-*   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents. The real setup executable or MSI package is then found inside the extracted folder and run with a visible progress wizard (`/qb EULA=1 PRIVACYPOLICY=1` for MSI, or `/pEULA=1 /pPRIVACYPOLICY=1` without `/s` for EXE).
+*   **Approach:** The script renames the downloaded `.exe` to `.7z`, then uses the **7-Zip CLI** (`7z.exe x ...`) to extract its contents.
+*   **Installer discovery:** The script prioritizes finding `*.msi` first in the extracted folder.
+    *   **If `.msi` is found:** Runs `msiexec.exe /i "<msi>" /passive EULA=1 PRIVACYPOLICY=1 KSN=0`. `/passive` displays an unattended progress bar (no user clicks required), while `EULA=1 PRIVACYPOLICY=1 KSN=0` satisfies all agreements automatically.
+    *   **If `.exe` is found:** Runs `$installer.FullName` with `@("/s", "/pEULA=1", "/pPRIVACYPOLICY=1", "/pKSN=0", "/v""/passive EULA=1 PRIVACYPOLICY=1 KSN=0""")`.
 *   **Prerequisite:** **7-Zip must be installed before KES.** This is enforced via the `"dependencies": ["7zip"]` field in `apps.json`. The TUI's `Start-Deployment` function automatically adds missing dependencies and reorders the install list so dependencies install first. Do not remove this dependency.
 *   **Extracted files location:** `C:\ProgramData\SZC\InstallCache\kes_extracted\`. Left in place on failure for debugging.
-*   **Status:** 🧪 Testing — fixes applied, pending user verification on Windows.
+*   **Status:** 🧪 Testing — updated to prioritize `.msi` directly with `/passive` unattended progress bar and auto-accepted EULA/Privacy Policy flags; pending user verification on VirtualBox Windows.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
 *   **Automatic discovery:** If no port/driver is specified, it uses WS-Discovery/TCP-IP discovery to install printers automatically.
@@ -134,7 +137,7 @@ The automation suite is organized into 4 distinct phases:
 *   **Elevation Required:** Almost all commands (including `winget`, `Add-PrinterPort`, and installers) require elevated Administrator privileges. `main.ps1` auto-elevates via UAC if not already running as Administrator -- do NOT remove this check.
 *   **Do NOT use the fwlink URL for ODT:** `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to an HTML Download Center page, not a binary. Always use the Office CDN direct URL `https://officecdn.microsoft.com/pr/wsus/setup.exe`.
 *   **No Unicode special characters in .ps1 files:** Never use em-dash, en-dash, curly quotes, or any non-ASCII character in PowerShell scripts. They cause parse errors depending on system encoding. Use only plain ASCII: `--` instead of em-dash, straight quotes `"` instead of curly quotes, etc.
-*   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside Ultrabox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
+*   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside VirtualBox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
 
 ---
 
@@ -144,7 +147,7 @@ The automation suite is organized into 4 distinct phases:
 |------|--------|-------|
 | Office 365 installer | ✅ Fixed | Office CDN direct URL, three-method download fallback (curl.exe -> Invoke-WebRequest -> WebClient). Size threshold lowered to 10KB (CDN setup.exe is a small bootstrapper). HTML sniffing. All Unicode chars removed from script. Display Level set to "Full" to show progress UI. |
 | Auto-elevation in main.ps1 | ✅ Done | `main.ps1` checks for Administrator role and re-launches elevated via `-Verb RunAs` UAC prompt if needed. |
-| Kaspersky installer | 🧪 Testing | Renamed to `.7z`, extracted with 7-Zip CLI, runs real setup silently (EXE or MSI). 7-Zip dependency now enforced via `apps.json` dependencies field. Pending user verification. |
+| Kaspersky installer | 🧪 Testing | Updated installer search to prioritize `.msi` directly with `/passive EULA=1 PRIVACYPOLICY=1 KSN=0` for unattended installation with progress bar (no user interaction required). Fallback to setup.exe with silent/passive switches. Pending user verification on VirtualBox. |
 | `Install-App` swallows errors | ✅ Fixed | Removed `try/catch/finally` wrapper; errors now propagate so TUI can detect failures correctly |
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
