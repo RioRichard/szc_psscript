@@ -9,7 +9,8 @@ function Install-App
     [String]$Name,
     [String]$PackageName,
     [String]$PackageManager,
-    [String]$CustomScript
+    [String]$CustomScript,
+    [String[]]$InstallArgs
   )
 
   if ($CustomScript)
@@ -34,6 +35,12 @@ function Install-App
   {
     $Command = @("install", "-e", "--id", $PackageName,
                  "--accept-package-agreements", "--accept-source-agreements", "-h")
+    
+    if ($InstallArgs -and $InstallArgs.Count -gt 0)
+    {
+      $Command += $InstallArgs
+    }
+    
     Write-Host "Running: $PackageManager $($Command -join ' ')"
     & $PackageManager @Command
 

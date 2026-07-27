@@ -252,7 +252,7 @@ function Start-Deployment
       $result = @{ Name = $app.Name; Status = ""; Error = "" }
       try
       {
-        Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -CustomScript $app.CustomScript
+        Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -CustomScript $app.CustomScript -InstallArgs $app.installArgs
         $result.Status = "OK"
         Write-Host " Done" -ForegroundColor Green
       } catch

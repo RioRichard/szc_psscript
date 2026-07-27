@@ -104,7 +104,11 @@
     "id": "zwcad",
     "name": "ZWCAD",
     "package": "ZWSOFT.ZWCAD.2026",
-    "packageManager": "winget"
+    "packageManager": "winget",
+    "installArgs": [
+      "--locale",
+      "en-US"
+    ]
   },
   {
     "id": "autocad",
