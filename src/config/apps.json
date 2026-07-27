@@ -112,5 +112,35 @@
     "package": "",
     "packageManager": "powershell",
     "customScript": "app/autocad_install/install.ps1"
+  },
+  {
+    "id": "kdenlive",
+    "name": "Kdenlive",
+    "package": "KDE.Kdenlive",
+    "packageManager": "winget"
+  },
+  {
+    "id": "krita",
+    "name": "Krita",
+    "package": "KDE.Krita",
+    "packageManager": "winget"
+  },
+  {
+    "id": "gimp",
+    "name": "GIMP",
+    "package": "GIMP.GIMP",
+    "packageManager": "winget"
+  },
+  {
+    "id": "blender",
+    "name": "Blender",
+    "package": "BlenderFoundation.Blender",
+    "packageManager": "winget"
+  },
+  {
+    "id": "freecad",
+    "name": "FreeCAD",
+    "package": "FreeCAD.FreeCAD",
+    "packageManager": "winget"
   }
 ]

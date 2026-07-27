@@ -155,4 +155,4 @@ The automation suite is organized into 4 distinct phases:
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers). Temporarily removed from Start-Deployment script entirely as it's on hold. |
-| Office App Expansion | 🧪 Ready for VirtualBox Testing | Added `vscode`, `python`, `nodejs`, `qgis`, `zwcad`, and `autocad` (AutoCAD LT via `src/app/autocad_install/install.ps1`) to `apps.json`. Ready for verification on Windows 11. |
+| Creative & Office App Expansion | 🧪 Ready for VirtualBox Testing | Added `vscode`, `python`, `nodejs`, `qgis`, `zwcad`, `autocad` (AutoCAD LT), `kdenlive`, `krita`, `gimp`, `blender`, and `freecad` to `apps.json`. Ready for verification on Windows 11. |
