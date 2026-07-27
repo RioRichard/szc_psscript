@@ -8,7 +8,7 @@
   {
     "id": "stirlingPdf",
     "name": "Stirling PDF",
-    "package": "StrilingTools.StirlingPDF",
+    "package": "StirlingTools.StirlingPDF",
     "packageManager": "winget"
   },
   {
@@ -103,7 +103,7 @@
   {
     "id": "zwcad",
     "name": "ZWCAD",
-    "package": "ZWSoft.ZWCAD",
+    "package": "ZWSOFT.ZWCAD.2026",
     "packageManager": "winget"
   },
   {
