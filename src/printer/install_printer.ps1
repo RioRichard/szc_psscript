@@ -1,93 +1,82 @@
-function Install-LocalPrinter
-{
-  [CmdletBinding(SupportsShouldProcess)]
-  param (
-    [Parameter(Mandatory)]
-    [string] $Name,
+<#
+.SYNOPSIS
+Installs a local printer in one of three modes: IPP, TCP/IP, or LPR.
 
-    [Parameter(Mandatory)]
-    [string] $Url,
-    
-    [string] $Port,
+.DESCRIPTION
+Handles 3 printer installation modes:
+1. IPP mode (no Port, no Driver specified): Uses Add-Printer with -DeviceUrl.
+2. TCP/IP port + driver mode (PortType = 'tcpip'): Creates port with Add-PrinterPort -PrinterHostAddress.
+3. LPR port + driver mode (PortType = 'lpr'): Creates port with Add-PrinterPort -LprHostAddress and -LprQueueName.
+#>
 
-    [string] $Driver,
-    
-    [string] $UrlDriver
-  )
+. (Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "../app/download_helper.ps1")
 
-  try
-  {
-    $ExistingPrinterByName = Get-Printer -Name $Name -ErrorAction SilentlyContinue
+function Install-LocalPrinter {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Url,
+        
+        [string]$Port,
+        [string]$PortType,
+        [string]$LprQueue,
+        [string]$Driver,
+        [string]$DriverUrl,
+        [string[]]$DriverInstallArgs
+    )
 
-    if ($ExistingPrinterByName)
-    {
-      Write-Host "Printer already exists: $Name"
-      return
+    $existingPrinter = Get-Printer -Name $Name -ErrorAction SilentlyContinue
+    if ($existingPrinter) {
+        Write-Host "Printer '$Name' already exists. Skipping."
+        return
     }
 
-    if ($PSCmdlet.ShouldProcess($Name, "Installing Printer $Name at $Url"))
-    {
-      if (!$Port -and !$Driver)
-      {
-        Write-Host "Adding printer $Name via DeviceUrl $Url..."
-        Add-Printer -Name $Name -DeviceUrl $Url -ErrorAction Stop
-      } else
-      {
-        if ($Port)
-        {
-          $ExistingPort = Get-PrinterPort -Name $Port -ErrorAction SilentlyContinue
-          if (!$ExistingPort)
-          {
-            Write-Host "Creating Printer Port: $Port at $Url..."
-            Add-PrinterPort -Name $Port -PrinterHostAddress $Url -ErrorAction Stop
-          }
+    if ($PortType -or $Driver) {
+        if (-not $Driver) {
+            throw "Driver name must be specified when using a port."
         }
 
-        if ($Driver)
-        {
-          $ExistingDriver = Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue
-          if (!$ExistingDriver)
-          {
-            if ($UrlDriver)
-            {
-              Write-Host "Downloading printer driver from $UrlDriver..."
-              $TempDir = "C:\ProgramData\SZC\InstallCache\Drivers"
-              New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
-              $DriverFileName = Split-Path $UrlDriver -Leaf
-              $DriverPath = Join-Path $TempDir $DriverFileName
-              Invoke-WebRequest -Uri $UrlDriver -OutFile $DriverPath
-
-              Write-Host "Running driver installer: $DriverFileName..."
-              $Proc = Start-Process -FilePath $DriverPath -ArgumentList "/s", "/q", "/silent" -PassThru -Wait
-              Write-Host "Driver installer finished with exit code: $($Proc.ExitCode)"
-              Remove-Item $DriverPath -Force
+        $existingDriver = Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue
+        if (-not $existingDriver) {
+            if (-not $DriverUrl) {
+                throw "Driver '$Driver' is not installed and no DriverUrl provided."
             }
-            else
-            {
-              Write-Warning "Driver '$Driver' is not installed, and no UrlDriver was provided."
+
+            $fileName = Split-Path $DriverUrl -Leaf
+            $cacheDir = "C:\ProgramData\SZC\InstallCache\Drivers"
+            if (-not (Test-Path $cacheDir)) {
+                New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
             }
-          }
+            $DriverPath = Join-Path $cacheDir $fileName
+
+            Start-MultiDownload -Url $DriverUrl -OutFile $DriverPath -ActivityName "Downloading $Driver driver"
+            
+            Write-Host "Installing driver for $Driver..."
+            $proc = Start-Process -FilePath $DriverPath -ArgumentList $DriverInstallArgs -PassThru -Wait
+            if ($proc.ExitCode -ne 0) {
+                throw "Driver installer exited with code $($proc.ExitCode)."
+            }
         }
 
-        Write-Host "Adding printer $Name with Port '$Port' and Driver '$Driver'..."
-        $PrinterParams = @{
-          Name = $Name
-          PortName = $Port
+        if ($PortType -eq 'tcpip') {
+            $existingPort = Get-PrinterPort -Name $Port -ErrorAction SilentlyContinue
+            if (-not $existingPort) {
+                Add-PrinterPort -Name $Port -PrinterHostAddress $Url -ErrorAction Stop
+            }
+        } elseif ($PortType -eq 'lpr') {
+            $existingPort = Get-PrinterPort -Name $Port -ErrorAction SilentlyContinue
+            if (-not $existingPort) {
+                Add-PrinterPort -Name $Port -PrinterHostAddress $Url -LprHostAddress $Url -LprQueueName $LprQueue -LprByteCounting -ErrorAction Stop
+            }
+        } else {
+            throw "Invalid PortType specified. Must be 'tcpip' or 'lpr'."
         }
-        if ($Driver)
-        {
-          $PrinterParams.DriverName = $Driver
-        }
-        Add-Printer @PrinterParams -ErrorAction Stop
-      }
+
+        Add-Printer -Name $Name -PortName $Port -DriverName $Driver -ErrorAction Stop
+    } else {
+        Add-Printer -Name $Name -DeviceUrl "http://$Url/ipp/print" -ErrorAction Stop
     }
-  
-  } catch
-  {
-    Write-Error "Error when installing printer $Name"
-    Write-Error "Reason: $($_.Exception.Message)"
-  } finally
-  {
-    Write-Host "Finished attempt to install printer $Name"
-  }
 }

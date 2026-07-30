@@ -35,12 +35,15 @@ $CommonApps = foreach ($app in ($_apps | Where-Object { -not $_.disabled })) {
 $_printers = Get-Content $printersJsonPath -Raw | ConvertFrom-Json
 $Printers = foreach ($printer in $_printers) {
   @{
-    Id        = $printer.id
-    Name      = $printer.name
-    Url       = $printer.url
-    Port      = $printer.port
-    Driver    = $printer.driver
-    UrlDriver = $printer.urlDriver
+    Id                = $printer.id
+    Name              = $printer.name
+    Url               = $printer.url
+    Port              = $printer.port
+    PortType          = $printer.portType
+    LprQueue          = $printer.lprQueue
+    Driver            = $printer.driver
+    DriverUrl         = $printer.driverUrl
+    DriverInstallArgs = @($printer.driverInstallArgs)
   }
 }
 
@@ -152,10 +155,11 @@ function Start-Deployment
 {
   Clear-Host
   $appsToInstall     = $CommonApps | Where-Object { $script:selectedApps[$_.Id] }
+  $printersToInstall = $Printers | Where-Object { $script:selectedPrinters[$_.Id] }
 
-  if ($appsToInstall.Count -eq 0)
+  if ($appsToInstall.Count -eq 0 -and $printersToInstall.Count -eq 0)
   {
-    Write-Host "  No applications selected for installation." -ForegroundColor Yellow
+    Write-Host "  No applications or printers selected for installation." -ForegroundColor Yellow
     Show-PressEnterToContinue
     return
   }
@@ -222,6 +226,14 @@ function Start-Deployment
     { Write-Host "    - $($app.Name)" }
   }
 
+  if ($printersToInstall.Count -gt 0)
+  {
+    Write-Host ""
+    Write-Host "  Printers to install:" -ForegroundColor Cyan
+    foreach ($p in $printersToInstall)
+    { Write-Host "    - $($p.Name) ($($p.Url))" }
+  }
+
   Write-Divider
   Write-Host "  1. Start Deployment"
   Write-Host "  2. Cancel"
@@ -237,6 +249,7 @@ function Start-Deployment
 
   # --- Track results ---
   $appResults     = [System.Collections.Generic.List[hashtable]]::new()
+  $printerResults = [System.Collections.Generic.List[hashtable]]::new()
 
   Clear-Host
   Write-Header "DEPLOYMENT IN PROGRESS"
@@ -267,7 +280,34 @@ function Start-Deployment
     }
   }
 
-
+  # Install Printers
+  if ($printersToInstall.Count -gt 0)
+  {
+    Write-Host ""
+    Write-Host "  [*] Installing printers..." -ForegroundColor Cyan
+    Write-Host ""
+    foreach ($printer in $printersToInstall)
+    {
+      Write-Host "  --> $($printer.Name) ($($printer.Url))..." -ForegroundColor Yellow -NoNewline
+      $result = @{ Name = $printer.Name; Status = ""; Error = "" }
+      try
+      {
+        Install-LocalPrinter -Name $printer.Name -Url $printer.Url `
+          -Port $printer.Port -PortType $printer.PortType `
+          -LprQueue $printer.LprQueue -Driver $printer.Driver `
+          -DriverUrl $printer.DriverUrl -DriverInstallArgs $printer.DriverInstallArgs
+        $result.Status = "OK"
+        Write-Host " Done" -ForegroundColor Green
+      } catch
+      {
+        $result.Status = "FAILED"
+        $result.Error  = $_.Exception.Message
+        Write-Host " FAILED" -ForegroundColor Red
+        Write-Host "      $($_.Exception.Message)" -ForegroundColor DarkRed
+      }
+      $printerResults.Add($result)
+    }
+  }
 
   # --- Summary Report ---
   Write-Host ""
@@ -296,7 +336,26 @@ function Start-Deployment
     Write-Host "  Result: $okCount / $($appResults.Count) installed." -ForegroundColor $(if ($failCount -eq 0) { "Green" } else { "Yellow" })
   }
 
-
+  if ($printerResults.Count -gt 0)
+  {
+    Write-Host ""
+    Write-Host "  PRINTERS" -ForegroundColor Cyan
+    Write-Host "  --------"
+    foreach ($r in $printerResults)
+    {
+      if ($r.Status -eq "OK")
+      { Write-Host "  [ OK ]  $($r.Name)" -ForegroundColor Green }
+      else
+      {
+        Write-Host "  [FAIL]  $($r.Name)" -ForegroundColor Red
+        if ($r.Error) { Write-Host "          $($r.Error)" -ForegroundColor DarkRed }
+      }
+    }
+    $pOk   = ($printerResults | Where-Object { $_.Status -eq "OK" }).Count
+    $pFail = $printerResults.Count - $pOk
+    Write-Host ""
+    Write-Host "  Result: $pOk / $($printerResults.Count) installed." -ForegroundColor $(if ($pFail -eq 0) { "Green" } else { "Yellow" })
+  }
 
   Write-Host ""
   Write-Footer
@@ -313,12 +372,12 @@ function Show-MainMenu
     
     # Show active count summaries
     $appCount = ($script:selectedApps.Values | Where-Object { $_ }).Count
-    Write-Host " Selected: $appCount/$($CommonApps.Count) Apps"
+    $printerCount = ($script:selectedPrinters.Values | Where-Object { $_ }).Count
+    Write-Host " Selected: $appCount/$($CommonApps.Count) Apps, $printerCount/$($Printers.Count) Printers"
     Write-Footer
     Write-Host "  1. Select User Department Profile"
     Write-Host "  2. Customize Selected Applications"
-    Write-Host "  3. Customize Selected Printers  " -NoNewline
-    Write-Host "(Coming Soon)" -ForegroundColor DarkGray
+    Write-Host "  3. Customize Selected Printers"
     Write-Host "  4. Collect User & System Information"
     Write-Host "  5. Start Deployment"
     Write-Host "  6. Exit"

@@ -31,7 +31,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `information/info_ui.ps1`: System information collection interface.
     *   `config/`: Directory containing configuration files:
         *   `apps.json`: Application definitions (id, name, package, packageManager, customScript).
-        *   `printers.json`: Printer definitions (id, name, url, port, driver, urlDriver).
+        *   `printers.json`: Printer definitions (id, name, url, portType, port, lprQueue, driver, driverUrl, driverInstallArgs).
         *   `departments.json`: Department profiles — each references apps and printers by `id`.
     *   `app/`: Directory containing application installation logic:
         *   `install_app.ps1`: Generic helper function (`Install-App`) to install applications via `winget` or custom setup scripts. Dot-sources `download_helper.ps1`.
@@ -45,8 +45,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `autocad_install/`: Files to deploy AutoCAD LT:
             *   `install.ps1`: Custom script that searches multiple locations for the Autodesk deployment package (`Setup.exe`): local cache (`C:\ProgramData\SZC\InstallCache\autocad\`), USB/removable drives (root, `\autocad`, `\AutoCAD LT`, `\SZC\autocad`). If found on external media, copies to local cache first. Runs `Setup.exe -q` for silent install. If not found, displays step-by-step instructions for creating a Custom Install deployment from `manage.autodesk.com` and offers to open the portal in a browser. Uses Named User licensing (user signs in after install).
     *   `printer/`: Directory containing printer installation logic:
-        *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) to add printer ports, download/install drivers, and configure printers.
-        *   `printers_dn.ps1`: Defines local/network printer profiles and triggers installation.
+        *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) handling three installation modes (IPP, TCP/IP, LPR). Dot-sources `download_helper.ps1` for `Start-MultiDownload`.
 
 ---
 
@@ -90,14 +89,32 @@ The `Install-App` function handles generic installations.
 *   **Status:** ✅ Working — extracts with 7-Zip CLI and runs `.msi` directly with `/passive EULA=1 PRIVACYPOLICY=1 KSN=0` for an unattended installation with progress bar.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
-*   **Automatic discovery:** If no port/driver is specified, it uses WS-Discovery/TCP-IP discovery to install printers automatically.
-*   **Manual Port & Driver setup:** If `$Port` and `$Driver` are specified:
-    1.  Checks if the port exists; creates a standard TCP/IP port if missing.
-    2.  Checks if the printer driver is installed; if missing and `$UrlDriver` is provided, downloads and runs the driver installer.
-    3.  Adds the local printer with the specified port and driver.
-*   **Gotchas:**
-    *   Ensure parameter binding matches: use `-UrlDriver` when calling `Install-LocalPrinter` (do not confuse with `$DriverUrl`).
-*   **Status:** 🚧 Implementation deferred. Printer information (IPs, drivers, models) not yet collected. The TUI option is marked **Coming Soon**.
+*   **Three installation modes**, driven entirely by `printers.json` config:
+    1.  **IPP mode** (no `portType`/`driver` in config): Uses `Add-Printer -DeviceUrl "http://<IP>/ipp/print"`. No driver download needed -- Windows uses its built-in IPP Class Driver. Best for HP and Ricoh printers.
+    2.  **TCP/IP + driver mode** (`portType: "tcpip"`): Creates a standard TCP/IP port via `Add-PrinterPort -PrinterHostAddress`, downloads and installs the driver, then adds the printer with the specific driver.
+    3.  **LPR + driver mode** (`portType: "lpr"`): Creates an LPR port via `Add-PrinterPort -LprHostAddress -LprQueueName -LprByteCounting`, downloads and installs the driver, then adds the printer.
+*   **Driver download:** Uses `Start-MultiDownload` from `download_helper.ps1` (parallel HTTP downloader with progress bars and BITS/WebClient fallbacks). Drivers are cached in `C:\ProgramData\SZC\InstallCache\Drivers\`.
+*   **Configurable silent install args:** Each printer's driver installer flags are specified via `driverInstallArgs` in `printers.json` (e.g., `["/S", "/norestart"]`).
+*   **Error propagation:** Like `Install-App`, the function does NOT catch exceptions -- it lets them bubble up to the TUI's `Start-Deployment` try/catch for proper FAILED reporting.
+*   **Signature:**
+    ```powershell
+    Install-LocalPrinter -Name <String> -Url <String> [-Port <String>] [-PortType <String>] [-LprQueue <String>] [-Driver <String>] [-DriverUrl <String>] [-DriverInstallArgs <String[]>]
+    ```
+*   **`printers.json` schema:**
+    ```json
+    {
+      "id": "brother_t4500",
+      "name": "Brother T4500DW BH",
+      "url": "192.168.3.20",
+      "portType": "tcpip",
+      "port": "IP_192.168.3.20",
+      "driver": "Brother MFC-T4500DW",
+      "driverUrl": "https://...",
+      "driverInstallArgs": ["/S", "/norestart"]
+    }
+    ```
+    Fields `portType`, `port`, `lprQueue`, `driver`, `driverUrl`, `driverInstallArgs` are all optional. If none are present, IPP mode is used.
+*   **Status:** ✅ Implemented (on `feature/printer-install` branch). Driver URLs and Windows driver names are placeholders pending testing.
 
 ### 5. TUI (`src/tui/`)
 *   Entry point is `Start-Tui`, called from `main.ps1` via `src/tui/tui.ps1`.
@@ -119,7 +136,7 @@ The `Install-App` function handles generic installations.
 The automation suite is organized into 4 distinct phases:
 
 1.  **Install Application Phase:** *(Active)* Automating the installation of standard applications via Winget or custom silent setup scripts (e.g., Microsoft Office, Kaspersky, Chrome, UniKey). Core installer bugs fixed — pending user verification.
-2.  **Install Printer Phase:** *(Deferred)* Waiting on printer hardware information (IPs, models, drivers). TUI menu option shows "Coming Soon".
+2.  **Install Printer Phase:** *(Implemented)* Three-mode printer installer (IPP / TCP+Driver / LPR+Driver). Config-driven via `printers.json`. Integrated into `Start-Deployment` with per-printer try/catch and summary report. Driver URLs are placeholders pending user-provided URLs and testing.
 3.  **Collect Information Phase:** *(Implemented)* Gathers OS, CPU, RAM, disk, IP, MAC info and saves a report to `C:\ProgramData\SZC\SystemInfo_<ComputerName>.txt`.
 4.  **TUI (Text User Interface) Phase:** *(Active)* Interactive CLI menu driven by user department profiles. Allows selecting apps/printers per department, manual overrides, system information collection, and deployment.
 
@@ -154,7 +171,7 @@ The automation suite is organized into 4 distinct phases:
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
-| Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers). Temporarily removed from Start-Deployment script entirely as it's on hold. |
+| Printer implementation | ✅ Implemented | Three-mode `Install-LocalPrinter` (IPP/TCP/LPR), integrated into `Start-Deployment`, config-driven via `printers.json`. Driver URLs and Windows driver names are PLACEHOLDER -- need real URLs from user plus driver analysis. Legacy `printers_dn.ps1` removed. On `feature/printer-install` branch. |
 | Creative & Office App Expansion | ✅ Mostly Working | User verified most apps install correctly on VirtualBox. AutoCAD LT requires pre-staged deployment package (by design). |
 | ZWCAD Removal | ❌ Removed | Removed `zwcad` entry from `apps.json` per user request. |
 | AutoCAD LT installer rewrite | ✅ Done | Rewrote `autocad_install/install.ps1` to search multiple locations (local cache + USB/removable drives), copy to local cache if found externally, show clear prep instructions with Autodesk portal link, and note Named User licensing. AutoCAD LT is commercial software with no public download URL -- requires a one-time Custom Install deployment package from `manage.autodesk.com`. |

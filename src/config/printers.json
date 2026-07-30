@@ -7,7 +7,15 @@
   {
     "id": "brother_t4500",
     "name": "Brother T4500DW BH",
-    "url": "192.168.3.20"
+    "url": "192.168.3.20",
+    "portType": "tcpip",
+    "port": "IP_192.168.3.20",
+    "driver": "Brother MFC-T4500DW",
+    "driverUrl": "PLACEHOLDER_BROTHER_DRIVER_URL",
+    "driverInstallArgs": [
+      "/S",
+      "/norestart"
+    ]
   },
   {
     "id": "ricoh_mp3555",
@@ -18,8 +26,13 @@
     "id": "epson_l1800",
     "name": "EPSON L1800 BH",
     "url": "192.168.3.21",
-    "port": "L1800",
-    "driver": "Epson L1800",
-    "urlDriver": "https://ftp.hp.com/pub/softlib/software13/printers/LJ4001-4004/V4_DriveronlyWebpack-54.5.5370-LJ4001-4004_V4_DriveronlyWebpack.exe"
+    "portType": "lpr",
+    "port": "EPSON_L1800_LPR",
+    "lprQueue": "L1800",
+    "driver": "EPSON L1800 Series",
+    "driverUrl": "PLACEHOLDER_EPSON_DRIVER_URL",
+    "driverInstallArgs": [
+      "/s"
+    ]
   }
 ]
