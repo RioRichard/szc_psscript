@@ -1,0 +1,176 @@
+[
+  {
+    "id": "unikey",
+    "name": "UniKey",
+    "package": "UniKey.UniKey",
+    "packageManager": "winget"
+  },
+  {
+    "id": "stirlingPdf",
+    "name": "Stirling PDF",
+    "package": "StirlingTools.StirlingPDF",
+    "packageManager": "winget"
+  },
+  {
+    "id": "viber",
+    "name": "Viber",
+    "package": "Rakuten.Viber",
+    "packageManager": "winget"
+  },
+  {
+    "id": "zalo",
+    "name": "Zalo",
+    "package": "VNGCorp.Zalo",
+    "packageManager": "winget"
+  },
+  {
+    "id": "office",
+    "name": "Microsoft Office",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/office_install/install.ps1"
+  },
+  {
+    "id": "kes",
+    "name": "Kaspersky Endpoint Security",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/kes_install/install.ps1",
+    "dependencies": [
+      "7zip"
+    ]
+  },
+  {
+    "id": "onedrive",
+    "name": "Microsoft OneDrive",
+    "package": "Microsoft.OneDrive",
+    "packageManager": "winget"
+  },
+  {
+    "id": "ultraviewer",
+    "name": "Ultra Viewer",
+    "package": "DucFabulous.UltraViewer",
+    "packageManager": "winget"
+  },
+  {
+    "id": "chrome",
+    "name": "Chrome",
+    "package": "Google.Chrome",
+    "packageManager": "winget"
+  },
+  {
+    "id": "7zip",
+    "name": "7 Zip",
+    "package": "7zip.7zip",
+    "packageManager": "winget"
+  },
+  {
+    "id": "vcredist_x64",
+    "name": "VCRedist (x64)",
+    "package": "Microsoft.VCRedist.2015+.x64",
+    "packageManager": "winget"
+  },
+  {
+    "id": "vcredist_x86",
+    "name": "VCRedist (x86)",
+    "package": "Microsoft.VCRedist.2015+.x86",
+    "packageManager": "winget"
+  },
+  {
+    "id": "vscode",
+    "name": "Visual Studio Code",
+    "package": "Microsoft.VisualStudioCode",
+    "packageManager": "winget"
+  },
+  {
+    "id": "python",
+    "name": "Python 3",
+    "package": "Python.Python.3.12",
+    "packageManager": "winget"
+  },
+  {
+    "id": "nodejs",
+    "name": "Node.js LTS",
+    "package": "OpenJS.NodeJS.LTS",
+    "packageManager": "winget"
+  },
+  {
+    "id": "qgis",
+    "name": "QGIS",
+    "package": "OSGeo.QGIS",
+    "packageManager": "winget"
+  },
+  {
+    "id": "autocad",
+    "name": "AutoCAD LT",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/autocad_install/install.ps1",
+    "disabled": true
+  },
+  {
+    "id": "kdenlive",
+    "name": "Kdenlive",
+    "package": "KDE.Kdenlive",
+    "packageManager": "winget"
+  },
+  {
+    "id": "krita",
+    "name": "Krita",
+    "package": "KDE.Krita",
+    "packageManager": "winget"
+  },
+  {
+    "id": "gimp",
+    "name": "GIMP",
+    "package": "GIMP.GIMP",
+    "packageManager": "winget"
+  },
+  {
+    "id": "blender",
+    "name": "Blender",
+    "package": "BlenderFoundation.Blender",
+    "packageManager": "winget"
+  },
+  {
+    "id": "freecad",
+    "name": "FreeCAD",
+    "package": "FreeCAD.FreeCAD",
+    "packageManager": "winget"
+  },
+  {
+    "id": "netfx35",
+    "name": ".NET Framework 3.5",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/netfx35_install/install.ps1"
+  },
+  {
+    "id": "vstor",
+    "name": "VS Tools for Office 2010",
+    "package": "Microsoft.VSTOR",
+    "packageManager": "winget"
+  },
+  {
+    "id": "bnsc",
+    "name": "Du toan BNSC",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/bnsc_install/install.ps1",
+    "dependencies": [
+      "netfx35",
+      "vstor",
+      "office"
+    ]
+  },
+  {
+    "id": "lockxls",
+    "name": "LockXLS",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/lockxls_install/install.ps1",
+    "dependencies": [
+      "bnsc"
+    ]
+  }
+]

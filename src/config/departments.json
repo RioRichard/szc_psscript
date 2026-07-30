@@ -1,0 +1,99 @@
+[
+  {
+    "id": "directors",
+    "name": "Ban Giam Doc (Directors)",
+    "apps": [
+      "office",
+      "viber",
+      "zalo",
+      "chrome",
+      "onedrive",
+      "unikey",
+      "7zip",
+      "kes"
+    ],
+    "printers": [
+      "hp4003",
+      "ricoh_mp3555"
+    ]
+  },
+  {
+    "id": "accounting",
+    "name": "Ke Toan (Accounting)",
+    "apps": [
+      "office",
+      "viber",
+      "zalo",
+      "chrome",
+      "onedrive",
+      "unikey",
+      "7zip",
+      "kes",
+      "vcredist_x64",
+      "vcredist_x86"
+    ],
+    "printers": [
+      "brother_t4500",
+      "ricoh_mp3555"
+    ]
+  },
+  {
+    "id": "hr_admin",
+    "name": "Hanh Chinh Nhan Su (HR & Admin)",
+    "apps": [
+      "office",
+      "viber",
+      "zalo",
+      "chrome",
+      "onedrive",
+      "unikey",
+      "7zip",
+      "kes",
+      "ultraviewer"
+    ],
+    "printers": [
+      "epson_l1800",
+      "ricoh_mp3555"
+    ]
+  },
+  {
+    "id": "sales",
+    "name": "Kinh Doanh (Sales / Marketing)",
+    "apps": [
+      "office",
+      "viber",
+      "zalo",
+      "chrome",
+      "onedrive",
+      "unikey",
+      "7zip",
+      "kes"
+    ],
+    "printers": [
+      "ricoh_mp3555"
+    ]
+  },
+  {
+    "id": "it_tech",
+    "name": "Ky Thuat (IT / Tech)",
+    "apps": [
+      "unikey",
+      "viber",
+      "zalo",
+      "office",
+      "7zip",
+      "kes",
+      "onedrive",
+      "ultraviewer",
+      "chrome",
+      "vcredist_x64",
+      "vcredist_x86"
+    ],
+    "printers": [
+      "hp4003",
+      "brother_t4500",
+      "ricoh_mp3555",
+      "epson_l1800"
+    ]
+  }
+]

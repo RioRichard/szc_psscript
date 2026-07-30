@@ -1,0 +1,12 @@
+<Configuration>
+  <Add>
+    <Product ID="O365BusinessRetail">
+      <Language ID="en-us"/>
+      <Language ID="vi-vn"/>
+      <ExcludeApp ID="Teams"/>
+    </Product>
+  </Add>
+  <RemoveMSI/>
+  <Display Level="Full" AcceptEULA="TRUE"/>
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE"/>
+</Configuration>
