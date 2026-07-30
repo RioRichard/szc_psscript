@@ -55,9 +55,50 @@ function Install-LocalPrinter {
             Start-MultiDownload -Url $DriverUrl -OutFile $DriverPath -ActivityName "Downloading $Driver driver"
             
             Write-Host "Installing driver for $Driver..."
-            $proc = Start-Process -FilePath $DriverPath -ArgumentList $DriverInstallArgs -PassThru -Wait
-            if ($proc.ExitCode -ne 0) {
-                throw "Driver installer exited with code $($proc.ExitCode)."
+
+            # Find 7-Zip binary if available for INF extraction
+            $7zExe = (Get-Command "7z.exe" -ErrorAction SilentlyContinue).Source
+            if (-not $7zExe) {
+                $possible7z = @(
+                    "$env:ProgramFiles\7-Zip\7z.exe",
+                    "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
+                ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if ($possible7z) { $7zExe = $possible7z }
+            }
+
+            $installedViaInf = $false
+            if ($7zExe -and ($DriverPath -match "\.(exe|zip|7z)$")) {
+                $extractDir = Join-Path $cacheDir "extracted_$([System.IO.Path]::GetFileNameWithoutExtension($fileName))"
+                if (-not (Test-Path $extractDir)) {
+                    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+                }
+
+                Write-Host "Extracting driver package using 7-Zip..."
+                & $7zExe x -y "-o$extractDir" $DriverPath | Out-Null
+
+                $infFiles = Get-ChildItem -Path $extractDir -Filter "*.inf" -Recurse -ErrorAction SilentlyContinue
+                if ($infFiles) {
+                    Write-Host "Found $($infFiles.Count) INF file(s). Staging driver via Pnputil..."
+                    foreach ($inf in $infFiles) {
+                        & pnputil.exe /add-driver "$($inf.FullName)" /install | Out-Null
+                    }
+
+                    Add-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue
+                    $existingDriverCheck = Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue
+                    if ($existingDriverCheck) {
+                        $installedViaInf = $true
+                        Write-Host "Driver '$Driver' successfully installed via INF staging."
+                    }
+                }
+            }
+
+            if (-not $installedViaInf) {
+                Write-Host "Running driver installer executable..."
+                $proc = Start-Process -FilePath $DriverPath -ArgumentList $DriverInstallArgs -PassThru -Wait
+                if ($proc.ExitCode -ne 0) {
+                    throw "Driver installer exited with code $($proc.ExitCode)."
+                }
+                Add-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue
             }
         }
 

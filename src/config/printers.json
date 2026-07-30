@@ -10,8 +10,8 @@
     "url": "192.168.3.20",
     "portType": "tcpip",
     "port": "IP_192.168.3.20",
-    "driver": "Brother MFC-T4500DW",
-    "driverUrl": "PLACEHOLDER_BROTHER_DRIVER_URL",
+    "driver": "Brother MFC-T4500DW Printer",
+    "driverUrl": "https://download.brother.com/welcome/dlf103803/Y17F_C1-hostm-H1.EXE",
     "driverInstallArgs": [
       "/S",
       "/norestart"
@@ -30,7 +30,7 @@
     "port": "EPSON_L1800_LPR",
     "lprQueue": "L1800",
     "driver": "EPSON L1800 Series",
-    "driverUrl": "PLACEHOLDER_EPSON_DRIVER_URL",
+    "driverUrl": "https://download3.ebz.epson.net/dsc/f/03/00/13/77/76/a8a9b4031a90f77fc81f66ca944fc8751e3bfd47/L1800_x64_21201UsHomeExportAsiaML.exe",
     "driverInstallArgs": [
       "/s"
     ]
