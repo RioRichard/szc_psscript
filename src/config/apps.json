@@ -115,7 +115,8 @@
     "name": "AutoCAD LT",
     "package": "",
     "packageManager": "powershell",
-    "customScript": "app/autocad_install/install.ps1"
+    "customScript": "app/autocad_install/install.ps1",
+    "disabled": true
   },
   {
     "id": "kdenlive",
@@ -146,5 +147,40 @@
     "name": "FreeCAD",
     "package": "FreeCAD.FreeCAD",
     "packageManager": "winget"
+  },
+  {
+    "id": "netfx35",
+    "name": ".NET Framework 3.5",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/netfx35_install/install.ps1"
+  },
+  {
+    "id": "vstor",
+    "name": "VS Tools for Office 2010",
+    "package": "Microsoft.VSTOR",
+    "packageManager": "winget"
+  },
+  {
+    "id": "bnsc",
+    "name": "Du toan BNSC",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/bnsc_install/install.ps1",
+    "dependencies": [
+      "netfx35",
+      "vstor",
+      "office"
+    ]
+  },
+  {
+    "id": "lockxls",
+    "name": "LockXLS",
+    "package": "",
+    "packageManager": "powershell",
+    "customScript": "app/lockxls_install/install.ps1",
+    "dependencies": [
+      "bnsc"
+    ]
   }
 ]

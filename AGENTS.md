@@ -42,8 +42,8 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
             *   `OfficeCustom.xml`: Custom ODT configuration file.
         *   `kes_install/`: Files to deploy Kaspersky Endpoint Security:
             *   `install.ps1`: Custom script to download and install Kaspersky silently using `Start-MultiDownload`.
-        *   `autocad_install/`: Files to deploy AutoCAD:
-            *   `install.ps1`: Custom script to run silent installation if `C:\ProgramData\SZC\InstallCache\autocad\Setup.exe` exists, or skip gracefully with an informative message if absent.
+        *   `autocad_install/`: Files to deploy AutoCAD LT:
+            *   `install.ps1`: Custom script that searches multiple locations for the Autodesk deployment package (`Setup.exe`): local cache (`C:\ProgramData\SZC\InstallCache\autocad\`), USB/removable drives (root, `\autocad`, `\AutoCAD LT`, `\SZC\autocad`). If found on external media, copies to local cache first. Runs `Setup.exe -q` for silent install. If not found, displays step-by-step instructions for creating a Custom Install deployment from `manage.autodesk.com` and offers to open the portal in a browser. Uses Named User licensing (user signs in after install).
     *   `printer/`: Directory containing printer installation logic:
         *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) to add printer ports, download/install drivers, and configure printers.
         *   `printers_dn.ps1`: Defines local/network printer profiles and triggers installation.
@@ -155,4 +155,9 @@ The automation suite is organized into 4 distinct phases:
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
 | Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers). Temporarily removed from Start-Deployment script entirely as it's on hold. |
-| Creative & Office App Expansion | 🧪 Ready for VirtualBox Testing | Added `vscode`, `python`, `nodejs`, `qgis`, `zwcad`, `autocad` (AutoCAD LT), `kdenlive`, `krita`, `gimp`, `blender`, and `freecad` to `apps.json`. Ready for verification on Windows 11. |
+| Creative & Office App Expansion | ✅ Mostly Working | User verified most apps install correctly on VirtualBox. ZWCAD locale issue fixed (see below). AutoCAD LT requires pre-staged deployment package (by design). |
+| ZWCAD installs in Chinese | ✅ Fixed | `installArgs` from `apps.json` was not being parsed into the `$CommonApps` hashtable in `tui.ps1`. Added `InstallArgs = @($app.installArgs)` to the hashtable builder (line 30). Now passes `--locale en-US` to winget correctly. |
+| AutoCAD LT installer rewrite | ✅ Done | Rewrote `autocad_install/install.ps1` to search multiple locations (local cache + USB/removable drives), copy to local cache if found externally, show clear prep instructions with Autodesk portal link, and note Named User licensing. AutoCAD LT is commercial software with no public download URL -- requires a one-time Custom Install deployment package from `manage.autodesk.com`. |
+| Google Drive Downloader | ✅ Added | Added `Start-GoogleDriveDownload` to `download_helper.ps1`. Automatically parses File ID from any GDrive URL format, handles cookies/sessions, bypasses virus scan confirmation tokens for large files, and validates binary outputs. |
+| BNSC Installer | ✅ Configured | Added Google Drive URL `15PJp17mN5XNhYf-H8yDoBeFUURu2VMmG` to `bnsc_install/install.ps1`. Configured dependency chain (.NET 3.5 -> VSTOR -> Office -> BNSC -> LockXLS). Verified installer structure (180MB ClickOnce / VSSetup bootstrapper containing VSTOR + BNSC). |
+| LockXLS Installer | ✅ Configured | Analyzed Google Drive file `1KdQyb6YEsB3LtDEK9cHNUfWdoULKobke`. File is a Zip archive containing `lockxlsrtm64.msi`. Updated `lockxls_install/install.ps1` to download from GDrive, extract ZIP, and execute `msiexec.exe /i lockxlsrtm64.msi /passive /norestart`. |

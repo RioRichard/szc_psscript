@@ -11,7 +11,7 @@ $departmentsJsonPath = Join-Path $PSScriptRoot "../config/departments.json"
 
 # Parse application definitions
 $_apps = Get-Content $appsJsonPath -Raw | ConvertFrom-Json
-$CommonApps = foreach ($app in $_apps) {
+$CommonApps = foreach ($app in ($_apps | Where-Object { -not $_.disabled })) {
   $customScript = ""
   if ($app.customScript) {
     $customScript = Join-Path $PSScriptRoot "../$($app.customScript)"
@@ -27,6 +27,7 @@ $CommonApps = foreach ($app in $_apps) {
     PackageManager = $app.packageManager
     CustomScript   = $customScript
     Dependencies   = $deps
+    InstallArgs    = @($app.installArgs)
   }
 }
 
@@ -252,7 +253,7 @@ function Start-Deployment
       $result = @{ Name = $app.Name; Status = ""; Error = "" }
       try
       {
-        Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -CustomScript $app.CustomScript -InstallArgs $app.installArgs
+        Install-App -Name $app.Name -PackageName $app.Package -PackageManager $app.PackageManager -CustomScript $app.CustomScript -InstallArgs $app.InstallArgs
         $result.Status = "OK"
         Write-Host " Done" -ForegroundColor Green
       } catch

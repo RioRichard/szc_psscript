@@ -279,3 +279,152 @@ function Start-MultiDownload
     & $doSingleDownload
   }
 }
+
+function Start-GoogleDriveDownload
+{
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)][string]$UrlOrId,
+    [Parameter(Mandatory = $true)][string]$OutFile
+  )
+
+  # Extract File ID from link formats like:
+  # https://drive.google.com/file/d/FILE_ID/view
+  # https://drive.google.com/open?id=FILE_ID
+  # https://drive.google.com/uc?export=download&id=FILE_ID
+  # or raw FILE_ID
+  $fileId = $UrlOrId.Trim()
+  if ($UrlOrId -match "id=([a-zA-Z0-9_-]+)")
+  {
+    $fileId = $Matches[1]
+  }
+  elseif ($UrlOrId -match "/d/([a-zA-Z0-9_-]+)")
+  {
+    $fileId = $Matches[1]
+  }
+
+  Write-Host "Downloading file from Google Drive (ID: $fileId)..." -ForegroundColor Cyan
+
+  $outDir = Split-Path $OutFile -Parent
+  if ($outDir -and -not (Test-Path $outDir))
+  {
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+  }
+
+  if (Test-Path $OutFile)
+  {
+    Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
+  }
+
+  $ProgressPreference = 'SilentlyContinue'
+
+  # Method A: Try curl.exe if available
+  if (Get-Command "curl.exe" -ErrorAction SilentlyContinue)
+  {
+    $cookieFile = [System.IO.Path]::GetTempFileName()
+    try
+    {
+      $ucUrl = "https://docs.google.com/uc?export=download&id=$fileId"
+      # Step 1: Initial request to get cookie and confirm form
+      $html = & curl.exe -s -L -c $cookieFile "$ucUrl"
+
+      $uuid = $null
+      $actionUrl = "https://drive.usercontent.google.com/download"
+
+      if ($html -match 'action="([^"]+)".*?name="uuid" value="([^"]+)"')
+      {
+        $actionUrl = $Matches[1]
+        $uuid = $Matches[2]
+      }
+      elseif ($html -match 'name="uuid" value="([^"]+)"')
+      {
+        $uuid = $Matches[1]
+      }
+
+      $confirmToken = $null
+      if ($html -match 'confirm=([0-9a-zA-Z_]+)')
+      {
+        $confirmToken = $Matches[1]
+      }
+      elseif ($html -match 'name="confirm" value="([^"]+)"')
+      {
+        $confirmToken = $Matches[1]
+      }
+
+      if ($uuid)
+      {
+        $confirmUrl = "${actionUrl}?id=${fileId}&export=download&confirm=t&uuid=${uuid}"
+        & curl.exe -L -b $cookieFile -o $OutFile "$confirmUrl"
+      }
+      elseif ($confirmToken)
+      {
+        $confirmUrl = "https://docs.google.com/uc?export=download&confirm=$confirmToken&id=$fileId"
+        & curl.exe -L -b $cookieFile -o $OutFile "$confirmUrl"
+      }
+      else
+      {
+        # Fallback to direct download
+        $confirmUrl = "https://docs.google.com/uc?export=download&confirm=t&id=$fileId"
+        & curl.exe -L -b $cookieFile -o $OutFile "$confirmUrl"
+      }
+    }
+    finally
+    {
+      if (Test-Path $cookieFile) { Remove-Item $cookieFile -Force -ErrorAction SilentlyContinue }
+    }
+  }
+  else
+  {
+    # Method B: Pure PowerShell WebRequest with WebRequestSession
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $ucUrl = "https://docs.google.com/uc?export=download&id=$fileId"
+    $resp = Invoke-WebRequest -Uri $ucUrl -WebSession $session -UseBasicParsing
+
+    if ($resp.Headers["Content-Type"] -notlike "*text/html*")
+    {
+      [System.IO.File]::WriteAllBytes($OutFile, $resp.Content)
+    }
+    else
+    {
+      $uuid = $null
+      $actionUrl = "https://drive.usercontent.google.com/download"
+      if ($resp.Content -match 'action="([^"]+)".*?name="uuid" value="([^"]+)"')
+      {
+        $actionUrl = $Matches[1]
+        $uuid = $Matches[2]
+      }
+      elseif ($resp.Content -match 'name="uuid" value="([^"]+)"')
+      {
+        $uuid = $Matches[1]
+      }
+
+      $confirmToken = $null
+      if ($resp.Content -match 'confirm=([0-9a-zA-Z_]+)') { $confirmToken = $Matches[1] }
+      elseif ($resp.Content -match 'name="confirm" value="([^"]+)"') { $confirmToken = $Matches[1] }
+
+      $confirmUrl = if ($uuid) {
+        "${actionUrl}?id=${fileId}&export=download&confirm=t&uuid=${uuid}"
+      } elseif ($confirmToken) {
+        "https://docs.google.com/uc?export=download&confirm=$confirmToken&id=$fileId"
+      } else {
+        "https://docs.google.com/uc?export=download&confirm=t&id=$fileId"
+      }
+
+      Invoke-WebRequest -Uri $confirmUrl -OutFile $OutFile -WebSession $session -UseBasicParsing
+    }
+  }
+
+  # Validate downloaded file
+  if (-not (Test-Path $OutFile) -or (Get-Item $OutFile).Length -lt 10000)
+  {
+    $sample = Get-Content $OutFile -Raw -ErrorAction SilentlyContinue
+    if ($sample -like "*<html*" -or $sample -like "*Google Drive*")
+    {
+      Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
+      throw "Google Drive download failed. The file is either restricted (requires sign-in / 'Anyone with the link' sharing) or the ID is invalid."
+    }
+  }
+
+  Write-Host "Google Drive download successful." -ForegroundColor Green
+}
+
