@@ -56,18 +56,28 @@ function Install-LocalPrinter {
             
             Write-Host "Installing driver for $Driver..."
 
+            # Check if driver needs extraction
+            $needsExtraction = ($DriverPath -match "\.(exe|zip|7z)$")
+
             # Find 7-Zip binary if available for INF extraction
-            $7zExe = (Get-Command "7z.exe" -ErrorAction SilentlyContinue).Source
-            if (-not $7zExe) {
-                $possible7z = @(
-                    "$env:ProgramFiles\7-Zip\7z.exe",
-                    "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
-                ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-                if ($possible7z) { $7zExe = $possible7z }
+            $7zExe = $null
+            if ($needsExtraction) {
+                $7zExe = (Get-Command "7z.exe" -ErrorAction SilentlyContinue).Source
+                if (-not $7zExe) {
+                    $possible7z = @(
+                        "$env:ProgramFiles\7-Zip\7z.exe",
+                        "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
+                    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+                    if ($possible7z) { $7zExe = $possible7z }
+                }
+
+                if (-not $7zExe) {
+                    throw "7-Zip is required to extract the driver package for '$Driver' but was not found. Please install 7-Zip first (winget install -e --id 7zip.7zip)."
+                }
             }
 
             $installedViaInf = $false
-            if ($7zExe -and ($DriverPath -match "\.(exe|zip|7z)$")) {
+            if ($7zExe -and $needsExtraction) {
                 $extractDir = Join-Path $cacheDir "extracted_$([System.IO.Path]::GetFileNameWithoutExtension($fileName))"
                 if (-not (Test-Path $extractDir)) {
                     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
@@ -93,6 +103,9 @@ function Install-LocalPrinter {
             }
 
             if (-not $installedViaInf) {
+                if ($needsExtraction) {
+                    throw "Failed to install driver '$Driver' via INF staging. No suitable .inf files found in extracted package."
+                }
                 Write-Host "Running driver installer executable..."
                 $proc = Start-Process -FilePath $DriverPath -ArgumentList $DriverInstallArgs -PassThru -Wait
                 if ($proc.ExitCode -ne 0) {
