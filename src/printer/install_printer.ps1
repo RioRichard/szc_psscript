@@ -144,7 +144,7 @@ function Install-LocalPrinter {
         } elseif ($PortType -eq 'lpr') {
             $existingPort = Get-PrinterPort -Name $Port -ErrorAction SilentlyContinue
             if (-not $existingPort) {
-                Add-PrinterPort -Name $Port -PrinterHostAddress $Url -LprHostAddress $Url -LprQueueName $LprQueue -LprByteCounting -ErrorAction Stop
+                Add-PrinterPort -Name $Port -PrinterHostAddress $Url -LprQueueName $LprQueue -LprByteCounting -ErrorAction Stop
             }
         } else {
             throw "Invalid PortType specified. Must be 'tcpip' or 'lpr'."
