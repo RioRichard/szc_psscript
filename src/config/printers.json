@@ -1,42 +1,144 @@
 [
   {
-    "id": "hp4003",
+    "id": "hp4003_dn",
     "name": "HP 4003 DN",
     "url": "192.168.3.21",
-    "paperSize": "A4",
-    "duplex": "TwoSidedLongEdge"
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp404_dn_trong",
+    "name": "HP 404dn DN (ben trong)",
+    "url": "192.168.3.27",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp404_dn_ngoai",
+    "name": "HP 404dn DN (ben ngoai)",
+    "url": "192.168.3.26",
+    "paperSize": "A4"
   },
   {
     "id": "brother_t4500",
-    "name": "Brother T4500DW BH",
+    "name": "Brother T4500DW DN",
     "url": "192.168.3.20",
     "portType": "tcpip",
     "port": "IP_192.168.3.20",
     "driver": "Brother MFC-T4500DW Printer",
     "driverUrl": "https://download.brother.com/welcome/dlf103803/Y17F_C1-hostm-H1.EXE",
-    "driverInstallArgs": [
-      "/S",
-      "/norestart"
-    ]
+    "driverInstallArgs": ["/S", "/norestart"]
   },
   {
-    "id": "ricoh_mp3555",
-    "name": "Ricoh MP 3555 BH (Photocopy)",
+    "id": "ricoh_mp3555_dn",
+    "name": "Ricoh MP 3555 DN (Photocopy)",
     "url": "192.168.3.23",
     "ippPath": "/printer",
     "paperSize": "A4"
   },
   {
-    "id": "epson_l1800",
-    "name": "EPSON L1800 BH",
+    "id": "epson_l1800_dn",
+    "name": "EPSON L1800 DN",
     "url": "192.168.3.21",
     "portType": "lpr",
-    "port": "EPSON_L1800_LPR",
+    "port": "EPSON_L1800_DN_LPR",
     "lprQueue": "L1800",
     "driver": "EPSON L1800 Series",
     "driverUrl": "https://download3.ebz.epson.net/dsc/f/03/00/13/77/76/a8a9b4031a90f77fc81f66ca944fc8751e3bfd47/L1800_x64_21201UsHomeExportAsiaML.exe",
-    "driverInstallArgs": [
-      "/s"
-    ]
+    "driverInstallArgs": ["/s"]
+  },
+  {
+    "id": "hp402dn_ns",
+    "name": "HP 402dn HCNS",
+    "url": "192.168.4.20",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp402dn_khth",
+    "name": "HP 402dn KHTH CD",
+    "url": "192.168.4.20",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp401_gs",
+    "name": "HP 401 Giam sat",
+    "url": "192.168.4.28",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp402dn_tckt",
+    "name": "HP 402dn TCKT",
+    "url": "192.168.4.29",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp402dn_tckt",
+    "name": "HP 402dn TCKT",
+    "url": "192.168.4.29",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp402dn_kd",
+    "name": "HP 402dn Kinh Doanh",
+    "url": "192.168.4.30",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp402dn_da",
+    "name": "HP 406dn Du An",
+    "url": "192.168.4.34",
+    "paperSize": "A4"
+  },
+  {
+    "id": "hp402dn_dd",
+    "name": "HP 402dn Dat dai",
+    "url": "192.168.4.24",
+    "paperSize": "A4"
+  },
+  {
+    "id": "ricoh_mp2555_cd",
+    "name": "Ricoh MP 2555 CD (Photocopy)",
+    "url": "192.168.4.38",
+    "ippPath": "/printer",
+    "paperSize": "A4"
+  },
+  {
+    "id": "brother_t4500_kd",
+    "name": "Brother T4500DW Kinh Doanh",
+    "url": "192.168.4.12",
+    "portType": "tcpip",
+    "port": "IP_192.168.4.12",
+    "driver": "Brother MFC-T4500DW Printer",
+    "driverUrl": "https://download.brother.com/welcome/dlf103803/Y17F_C1-hostm-H1.EXE",
+    "driverInstallArgs": ["/S", "/norestart"]
+  },
+  {
+    "id": "brother_t4500_dd",
+    "name": "Brother T4500 Dat Dai",
+    "url": "192.168.4.13",
+    "portType": "tcpip",
+    "port": "IP_192.168.4.13",
+    "driver": "Brother MFC-T4500DW Printer",
+    "driverUrl": "https://download.brother.com/welcome/dlf103803/Y17F_C1-hostm-H1.EXE",
+    "driverInstallArgs": ["/S", "/norestart"]
+  },
+  {
+    "id": "brother_t4500_hcns",
+    "name": "Brother T4500DW HCNS",
+    "url": "192.168.4.22",
+    "portType": "tcpip",
+    "port": "IP_192.168.4.22",
+    "driver": "Brother MFC-T4500DW Printer",
+    "driverUrl": "https://download.brother.com/welcome/dlf103803/Y17F_C1-hostm-H1.EXE",
+    "driverInstallArgs": ["/S", "/norestart"]
+  },
+  {
+    "id": "epson_l1800_da",
+    "name": "EPSON L1800 Du An",
+    "url": "192.168.4.25",
+    "portType": "lpr",
+    "port": "EPSON_L1800_CD_LPR",
+    "lprQueue": "L1800",
+    "driver": "EPSON L1800 Series",
+    "driverUrl": "https://download3.ebz.epson.net/dsc/f/03/00/13/77/76/a8a9b4031a90f77fc81f66ca944fc8751e3bfd47/L1800_x64_21201UsHomeExportAsiaML.exe",
+    "driverInstallArgs": ["/s"]
   }
 ]

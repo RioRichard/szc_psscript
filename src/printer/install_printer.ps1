@@ -45,6 +45,18 @@ function Install-LocalPrinter {
 
         $existingDriver = Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue
         if (-not $existingDriver) {
+            # Try wildcard match in case driver name in Windows differs slightly from config
+            $allDrivers = Get-PrinterDriver -ErrorAction SilentlyContinue
+            $wildcardMatch = $allDrivers | Where-Object { $_.Name -like "*$Driver*" -or $Driver -like "*$($_.Name)*" } | Select-Object -First 1
+            if ($wildcardMatch) {
+                $Driver = $wildcardMatch.Name
+                $existingDriver = $wildcardMatch
+            }
+        }
+
+        if ($existingDriver) {
+            Write-Host "  Driver '$Driver' is already installed in Windows." -ForegroundColor Green
+        } else {
             if (-not $DriverUrl) {
                 throw "Driver '$Driver' is not installed and no DriverUrl provided."
             }
@@ -56,9 +68,14 @@ function Install-LocalPrinter {
             }
             $DriverPath = Join-Path $cacheDir $fileName
 
-            Start-MultiDownload -Url $DriverUrl -OutFile $DriverPath -ActivityName "Downloading $Driver driver"
+            if ((Test-Path $DriverPath) -and (Get-Item $DriverPath).Length -gt 1024) {
+                Write-Host "  Found cached driver package ($fileName). Skipping download." -ForegroundColor Green
+            } else {
+                if (Test-Path $DriverPath) { Remove-Item $DriverPath -Force -ErrorAction SilentlyContinue }
+                Start-MultiDownload -Url $DriverUrl -OutFile $DriverPath -ActivityName "Downloading $Driver driver"
+            }
             
-            Write-Host "Installing driver for $Driver..."
+            Write-Host "  Installing driver for $Driver..."
 
             # Check if driver needs extraction
             $needsExtraction = ($DriverPath -match "\.(exe|zip|7z)$")
