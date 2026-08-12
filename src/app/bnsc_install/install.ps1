@@ -151,8 +151,13 @@ try {
     # Download installer if not cached
     if (-not (Test-Path $InstallerPath)) {
         Write-Host "Downloading BNSC installer from Google Drive..."
-        $dlHelper = Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "..\download_helper.ps1"
-        if (Test-Path $dlHelper) { . $dlHelper }
+        if (-not (Get-Command "Start-GoogleDriveDownload" -ErrorAction SilentlyContinue)) {
+            if ($MyInvocation.MyCommand.Path) {
+                $dlHelper = Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "..\download_helper.ps1"
+                if (Test-Path $dlHelper) { . $dlHelper }
+            }
+        }
+
 
         if (Get-Command "Start-GoogleDriveDownload" -ErrorAction SilentlyContinue) {
             Start-GoogleDriveDownload -UrlOrId $DownloadUrl -OutFile $InstallerPath

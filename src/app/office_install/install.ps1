@@ -1,7 +1,4 @@
-# Use $MyInvocation to find this script's own directory -- works correctly even when dot-sourced
-# ($PSScriptRoot resolves to the CALLER's directory when dot-sourced, so never use it here)
-$_thisDir     = Split-Path $MyInvocation.MyCommand.Path -Parent
-$OfficeXMLSrc = Join-Path $_thisDir "OfficeCustom.xml"
+$_thisDir = if ($MyInvocation.MyCommand.Path) { Split-Path $MyInvocation.MyCommand.Path -Parent } else { $null }
 
 $CacheDir = "C:\ProgramData\SZC\InstallCache"
 $OdtDir   = Join-Path $CacheDir "odt"
@@ -11,10 +8,14 @@ New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
 New-Item -ItemType Directory -Force -Path $OdtDir   | Out-Null
 
 # Copy XML into $OdtDir so setup.exe and OfficeCustom.xml are in the same folder.
-# Running setup.exe from the same directory as the XML (with just the filename, no path)
-# is the most reliable way to avoid error 0-2048 "couldn't find configuration file".
 $OfficeXML = Join-Path $OdtDir "OfficeCustom.xml"
-Copy-Item -Path $OfficeXMLSrc -Destination $OfficeXML -Force
+if ($_thisDir) {
+  $OfficeXMLSrc = Join-Path $_thisDir "OfficeCustom.xml"
+  if (Test-Path $OfficeXMLSrc) {
+    Copy-Item -Path $OfficeXMLSrc -Destination $OfficeXML -Force
+  }
+}
+
 
 # --- Step 1: Obtain ODT setup.exe ---
 # The fwlink URL (LinkID=626065) redirects to the Microsoft Download Center *web page*,

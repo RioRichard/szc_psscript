@@ -1,6 +1,14 @@
 # SZC PowerShell Script Suite - Bundler Script
-# This script bundles all src/ components, config JSONs, installer scripts,
-# and static assets into a single standalone file: dist/szc_setup_bundled.ps1
+# Bundles all scripts, configs, and assets into: dist/szc_setup_bundled.ps1
+#
+# Strategy:
+# - JSON configs and XML assets are embedded as here-string variables
+# - download_helper.ps1 is inlined at the top level (all functions globally available)
+# - install_printer.ps1 is inlined at the top level
+# - Custom installer scripts are embedded as scriptblocks verbatim
+#   (they already guard $MyInvocation.MyCommand.Path with null-checks)
+# - Office installer gets a special preamble to extract embedded OfficeCustom.xml
+#   (since the original uses $MyInvocation to find the XML sibling file)
 
 $ErrorActionPreference = "Stop"
 
@@ -16,7 +24,7 @@ $outputFile = Join-Path $distDir "szc_setup_bundled.ps1"
 
 Write-Host "Packing SZC script suite into single file..." -ForegroundColor Cyan
 
-# Function to safely quote string for single-quoted Here-String
+# Helper: wrap content in a single-quoted here-string
 function Format-HereString([string]$content) {
     return "@'`n" + $content.Trim() + "`n'@"
 }
@@ -29,17 +37,25 @@ $departmentsJson = Get-Content (Join-Path $repoRoot "src/config/departments.json
 # 2. Read Assets
 $officeCustomXml = Get-Content (Join-Path $repoRoot "src/app/office_install/OfficeCustom.xml") -Raw
 
-# 3. Read Helper Scripts
+# 3. Read Helper Scripts (inlined at top level)
 $downloadHelper  = Get-Content (Join-Path $repoRoot "src/app/download_helper.ps1") -Raw
 $installPrinter  = Get-Content (Join-Path $repoRoot "src/printer/install_printer.ps1") -Raw
 
-# 4. Read Custom Install Scripts
-$officeInstallScript  = Get-Content (Join-Path $repoRoot "src/app/office_install/install.ps1") -Raw
+# 4. Read Custom Install Scripts (embedded verbatim as scriptblocks)
 $kesInstallScript     = Get-Content (Join-Path $repoRoot "src/app/kes_install/install.ps1") -Raw
 $bnscInstallScript    = Get-Content (Join-Path $repoRoot "src/app/bnsc_install/install.ps1") -Raw
 $lockxlsInstallScript = Get-Content (Join-Path $repoRoot "src/app/lockxls_install/install.ps1") -Raw
 $autocadInstallScript = Get-Content (Join-Path $repoRoot "src/app/autocad_install/install.ps1") -Raw
 $netfx35InstallScript = Get-Content (Join-Path $repoRoot "src/app/netfx35_install/install.ps1") -Raw
+
+# Office: skip lines 1-18 (the $MyInvocation header that finds OfficeCustom.xml).
+# Line 20+ is the actual install logic starting with "# --- Step 1:".
+$officeLines = Get-Content (Join-Path $repoRoot "src/app/office_install/install.ps1")
+$officeStartIdx = 0
+for ($i = 0; $i -lt $officeLines.Count; $i++) {
+    if ($officeLines[$i] -match '# --- Step 1:') { $officeStartIdx = $i; break }
+}
+$officeBody = ($officeLines[$officeStartIdx..($officeLines.Count - 1)]) -join "`n"
 
 # 5. Read TUI components
 $tuiUtils   = Get-Content (Join-Path $repoRoot "src/tui/components/utils.ps1") -Raw
@@ -56,7 +72,7 @@ $sb = [System.Text.StringBuilder]::new()
 [void]$sb.AppendLine("# ==========================================================================")
 [void]$sb.AppendLine("")
 
-# Auto elevation check
+# Auto elevation
 [void]$sb.AppendLine('# --- Ensure Administrator Privileges ---')
 [void]$sb.AppendLine('if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))')
 [void]$sb.AppendLine('{')
@@ -77,7 +93,7 @@ $sb = [System.Text.StringBuilder]::new()
 [void]$sb.AppendLine('}')
 [void]$sb.AppendLine("")
 
-# Embed JSON files
+# Embedded configs & assets
 [void]$sb.AppendLine('# --- EMBEDDED CONFIGURATIONS & ASSETS ---')
 [void]$sb.AppendLine('$script:Embedded_AppsJson = ' + (Format-HereString $appsJson))
 [void]$sb.AppendLine('$script:Embedded_PrintersJson = ' + (Format-HereString $printersJson))
@@ -85,27 +101,34 @@ $sb = [System.Text.StringBuilder]::new()
 [void]$sb.AppendLine('$script:Embedded_OfficeCustomXml = ' + (Format-HereString $officeCustomXml))
 [void]$sb.AppendLine("")
 
-# Embed Helper Scripts
-[void]$sb.AppendLine('# --- DOWNLOAD HELPER ---')
+# download_helper.ps1 (top level, all functions available globally)
+[void]$sb.AppendLine('# --- DOWNLOAD HELPER (inlined at top level) ---')
 [void]$sb.AppendLine($downloadHelper)
 [void]$sb.AppendLine("")
 
-[void]$sb.AppendLine('# --- PRINTER INSTALLER ---')
+# install_printer.ps1 (top level, verbatim - its $MyInvocation guard will
+# skip the dot-source since download_helper is already loaded above)
+[void]$sb.AppendLine('# --- PRINTER INSTALLER (inlined at top level) ---')
 [void]$sb.AppendLine($installPrinter)
 [void]$sb.AppendLine("")
 
-# Custom installers table
+# Custom installers as scriptblocks
 [void]$sb.AppendLine('# --- EMBEDDED CUSTOM INSTALLERS ---')
 [void]$sb.AppendLine('$script:EmbeddedCustomScripts = @{')
 
+# Office: bundled preamble + body (skip file-path header)
 [void]$sb.AppendLine('  "app/office_install/install.ps1" = {')
-[void]$sb.AppendLine('    $OdtDir = "C:\ProgramData\SZC\InstallCache\odt"')
-[void]$sb.AppendLine('    New-Item -ItemType Directory -Force -Path $OdtDir | Out-Null')
-[void]$sb.AppendLine('    Set-Content -Path (Join-Path $OdtDir "OfficeCustom.xml") -Value $script:Embedded_OfficeCustomXml -Encoding UTF8 -Force')
-[void]$sb.AppendLine('    $OfficeXMLSrc = Join-Path $OdtDir "OfficeCustom.xml"')
-[void]$sb.AppendLine($officeInstallScript)
+[void]$sb.AppendLine('    # Bundled: extract embedded OfficeCustom.xml then run install logic')
+[void]$sb.AppendLine('    $CacheDir = "C:\ProgramData\SZC\InstallCache"')
+[void]$sb.AppendLine('    $OdtDir   = Join-Path $CacheDir "odt"')
+[void]$sb.AppendLine('    New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null')
+[void]$sb.AppendLine('    New-Item -ItemType Directory -Force -Path $OdtDir   | Out-Null')
+[void]$sb.AppendLine('    $OfficeXML = Join-Path $OdtDir "OfficeCustom.xml"')
+[void]$sb.AppendLine('    Set-Content -Path $OfficeXML -Value $script:Embedded_OfficeCustomXml -Encoding UTF8 -Force')
+[void]$sb.AppendLine($officeBody)
 [void]$sb.AppendLine('  }')
 
+# KES, BNSC, LockXLS, AutoCAD, .NET 3.5: verbatim (all already have MyInvocation guards)
 [void]$sb.AppendLine('  "app/kes_install/install.ps1" = {')
 [void]$sb.AppendLine($kesInstallScript)
 [void]$sb.AppendLine('  }')
@@ -129,7 +152,7 @@ $sb = [System.Text.StringBuilder]::new()
 [void]$sb.AppendLine('}')
 [void]$sb.AppendLine("")
 
-# Inlined Install-App function
+# Install-App function
 [void]$sb.AppendLine(@'
 function Install-App
 {
@@ -185,7 +208,7 @@ function Install-App
 '@)
 [void]$sb.AppendLine("")
 
-# Embed TUI Components
+# TUI Components
 [void]$sb.AppendLine('# --- TUI COMPONENTS ---')
 [void]$sb.AppendLine($tuiUtils)
 [void]$sb.AppendLine($tuiApp)
@@ -193,7 +216,7 @@ function Install-App
 [void]$sb.AppendLine($tuiInfo)
 [void]$sb.AppendLine("")
 
-# Embed TUI Main Coordinator
+# TUI Coordinator (replaces tui.ps1's file-loading with embedded variable parsing)
 [void]$sb.AppendLine('# --- TUI COORDINATOR ---')
 [void]$sb.AppendLine(@'
 $_apps = $script:Embedded_AppsJson | ConvertFrom-Json
@@ -561,8 +584,8 @@ function Start-Tui
 '@)
 [void]$sb.AppendLine("")
 
-# Launch entrypoint
-[void]$sb.AppendLine("# --- LAUNCH DEPLOYMENT ---")
+# Launch
+[void]$sb.AppendLine("# --- LAUNCH ---")
 [void]$sb.AppendLine("Start-Tui")
 [void]$sb.AppendLine('Write-Host ""')
 [void]$sb.AppendLine('Write-Host "Session ended. Press Enter to close this window..." -ForegroundColor DarkGray')

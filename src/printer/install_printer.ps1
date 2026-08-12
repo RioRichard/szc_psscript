@@ -10,7 +10,12 @@ Handles 3 printer installation modes:
 3. LPR port + driver mode (PortType = 'lpr'): Creates port with Add-PrinterPort -LprHostAddress and -LprQueueName.
 #>
 
-. (Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "../app/download_helper.ps1")
+if (-not (Get-Command "Start-MultiDownload" -ErrorAction SilentlyContinue)) {
+    if ($MyInvocation.MyCommand.Path) {
+        . (Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "../app/download_helper.ps1")
+    }
+}
+
 
 function Install-LocalPrinter {
     [CmdletBinding()]

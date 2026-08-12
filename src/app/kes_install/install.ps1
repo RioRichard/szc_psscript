@@ -12,12 +12,14 @@ $ArchiveAs7z   = Join-Path $CacheDir "keswin_setup.7z"
 # --- Step 1: Ensure download helper is loaded and download installer ---
 if (-not (Get-Command Start-MultiDownload -ErrorAction SilentlyContinue))
 {
-  $_thisDir = Split-Path $MyInvocation.MyCommand.Path -Parent
-  $_helperPath = Join-Path $_thisDir "..\download_helper.ps1"
-  if (Test-Path $_helperPath)
-  { . $_helperPath 
+  if ($MyInvocation.MyCommand.Path)
+  {
+    $_thisDir = Split-Path $MyInvocation.MyCommand.Path -Parent
+    $_helperPath = Join-Path $_thisDir "..\download_helper.ps1"
+    if (Test-Path $_helperPath) { . $_helperPath }
   }
 }
+
 
 # Remove leftover download if present
 if (Test-Path $DownloadedExe)

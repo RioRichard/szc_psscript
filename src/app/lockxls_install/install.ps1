@@ -68,8 +68,13 @@ try {
     # Download installer package if not cached
     if (-not (Test-Path $ZipPath)) {
         Write-Host "Downloading LockXLS package from Google Drive..."
-        $dlHelper = Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "..\download_helper.ps1"
-        if (Test-Path $dlHelper) { . $dlHelper }
+        if (-not (Get-Command "Start-GoogleDriveDownload" -ErrorAction SilentlyContinue)) {
+            if ($MyInvocation.MyCommand.Path) {
+                $dlHelper = Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "..\download_helper.ps1"
+                if (Test-Path $dlHelper) { . $dlHelper }
+            }
+        }
+
 
         Start-GoogleDriveDownload -UrlOrId $DownloadUrl -OutFile $ZipPath
     } else {
