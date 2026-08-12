@@ -1,20 +1,206 @@
-# SZC Automated Deployment TUI - Coordinator
+# SZC PowerShell Script Suite - Bundler Script
+# This script bundles all src/ components, config JSONs, installer scripts,
+# and static assets into a single standalone file: dist/szc_setup_bundled.ps1
 
-# Load helper installer scripts
-. (Join-Path $PSScriptRoot "../app/install_app.ps1")
-. (Join-Path $PSScriptRoot "../printer/install_printer.ps1")
+$ErrorActionPreference = "Stop"
 
-# Load configuration paths
-$appsJsonPath = Join-Path $PSScriptRoot "../config/apps.json"
-$printersJsonPath = Join-Path $PSScriptRoot "../config/printers.json"
-$departmentsJsonPath = Join-Path $PSScriptRoot "../config/departments.json"
+$repoRoot = $PSScriptRoot
+if (-not $repoRoot) { $repoRoot = Get-Location }
 
-# Parse application definitions
-$_apps = Get-Content $appsJsonPath -Raw | ConvertFrom-Json
+$distDir = Join-Path $repoRoot "dist"
+if (-not (Test-Path $distDir)) {
+    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+}
+
+$outputFile = Join-Path $distDir "szc_setup_bundled.ps1"
+
+Write-Host "Packing SZC script suite into single file..." -ForegroundColor Cyan
+
+# Function to safely quote string for single-quoted Here-String
+function Format-HereString([string]$content) {
+    return "@'`n" + $content.Trim() + "`n'@"
+}
+
+# 1. Read JSON Configs
+$appsJson        = Get-Content (Join-Path $repoRoot "src/config/apps.json") -Raw
+$printersJson    = Get-Content (Join-Path $repoRoot "src/config/printers.json") -Raw
+$departmentsJson = Get-Content (Join-Path $repoRoot "src/config/departments.json") -Raw
+
+# 2. Read Assets
+$officeCustomXml = Get-Content (Join-Path $repoRoot "src/app/office_install/OfficeCustom.xml") -Raw
+
+# 3. Read Helper Scripts
+$downloadHelper  = Get-Content (Join-Path $repoRoot "src/app/download_helper.ps1") -Raw
+$installPrinter  = Get-Content (Join-Path $repoRoot "src/printer/install_printer.ps1") -Raw
+
+# 4. Read Custom Install Scripts
+$officeInstallScript  = Get-Content (Join-Path $repoRoot "src/app/office_install/install.ps1") -Raw
+$kesInstallScript     = Get-Content (Join-Path $repoRoot "src/app/kes_install/install.ps1") -Raw
+$bnscInstallScript    = Get-Content (Join-Path $repoRoot "src/app/bnsc_install/install.ps1") -Raw
+$lockxlsInstallScript = Get-Content (Join-Path $repoRoot "src/app/lockxls_install/install.ps1") -Raw
+$autocadInstallScript = Get-Content (Join-Path $repoRoot "src/app/autocad_install/install.ps1") -Raw
+$netfx35InstallScript = Get-Content (Join-Path $repoRoot "src/app/netfx35_install/install.ps1") -Raw
+
+# 5. Read TUI components
+$tuiUtils   = Get-Content (Join-Path $repoRoot "src/tui/components/utils.ps1") -Raw
+$tuiApp     = Get-Content (Join-Path $repoRoot "src/tui/app/app_ui.ps1") -Raw
+$tuiPrinter = Get-Content (Join-Path $repoRoot "src/tui/printer/printer_ui.ps1") -Raw
+$tuiInfo    = Get-Content (Join-Path $repoRoot "src/tui/information/info_ui.ps1") -Raw
+
+# 6. Assemble the single script
+$sb = [System.Text.StringBuilder]::new()
+
+[void]$sb.AppendLine("# ==========================================================================")
+[void]$sb.AppendLine("# SZC AUTOMATED DEPLOYMENT SUITE - STANDALONE BUNDLED SCRIPT")
+[void]$sb.AppendLine("# Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+[void]$sb.AppendLine("# ==========================================================================")
+[void]$sb.AppendLine("")
+
+# Auto elevation check
+[void]$sb.AppendLine('# --- Ensure Administrator Privileges ---')
+[void]$sb.AppendLine('if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))')
+[void]$sb.AppendLine('{')
+[void]$sb.AppendLine('  Write-Host "This tool requires Administrator privileges. Requesting elevation..." -ForegroundColor Yellow')
+[void]$sb.AppendLine('  try')
+[void]$sb.AppendLine('  {')
+[void]$sb.AppendLine('    Start-Process powershell.exe `')
+[void]$sb.AppendLine('      -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" `')
+[void]$sb.AppendLine('      -Verb RunAs')
+[void]$sb.AppendLine('  }')
+[void]$sb.AppendLine('  catch')
+[void]$sb.AppendLine('  {')
+[void]$sb.AppendLine('    Write-Host "Failed to elevate: $($_.Exception.Message)" -ForegroundColor Red')
+[void]$sb.AppendLine('    Write-Host "Please right-click PowerShell and select ' + "'Run as Administrator'" + '." -ForegroundColor Yellow')
+[void]$sb.AppendLine('    Read-Host "Press Enter to exit"')
+[void]$sb.AppendLine('  }')
+[void]$sb.AppendLine('  exit')
+[void]$sb.AppendLine('}')
+[void]$sb.AppendLine("")
+
+# Embed JSON files
+[void]$sb.AppendLine('# --- EMBEDDED CONFIGURATIONS & ASSETS ---')
+[void]$sb.AppendLine('$script:Embedded_AppsJson = ' + (Format-HereString $appsJson))
+[void]$sb.AppendLine('$script:Embedded_PrintersJson = ' + (Format-HereString $printersJson))
+[void]$sb.AppendLine('$script:Embedded_DepartmentsJson = ' + (Format-HereString $departmentsJson))
+[void]$sb.AppendLine('$script:Embedded_OfficeCustomXml = ' + (Format-HereString $officeCustomXml))
+[void]$sb.AppendLine("")
+
+# Embed Helper Scripts
+[void]$sb.AppendLine('# --- DOWNLOAD HELPER ---')
+[void]$sb.AppendLine($downloadHelper)
+[void]$sb.AppendLine("")
+
+[void]$sb.AppendLine('# --- PRINTER INSTALLER ---')
+[void]$sb.AppendLine($installPrinter)
+[void]$sb.AppendLine("")
+
+# Custom installers table
+[void]$sb.AppendLine('# --- EMBEDDED CUSTOM INSTALLERS ---')
+[void]$sb.AppendLine('$script:EmbeddedCustomScripts = @{')
+
+[void]$sb.AppendLine('  "app/office_install/install.ps1" = {')
+[void]$sb.AppendLine('    $OdtDir = "C:\ProgramData\SZC\InstallCache\odt"')
+[void]$sb.AppendLine('    New-Item -ItemType Directory -Force -Path $OdtDir | Out-Null')
+[void]$sb.AppendLine('    Set-Content -Path (Join-Path $OdtDir "OfficeCustom.xml") -Value $script:Embedded_OfficeCustomXml -Encoding UTF8 -Force')
+[void]$sb.AppendLine('    $OfficeXMLSrc = Join-Path $OdtDir "OfficeCustom.xml"')
+[void]$sb.AppendLine($officeInstallScript)
+[void]$sb.AppendLine('  }')
+
+[void]$sb.AppendLine('  "app/kes_install/install.ps1" = {')
+[void]$sb.AppendLine($kesInstallScript)
+[void]$sb.AppendLine('  }')
+
+[void]$sb.AppendLine('  "app/bnsc_install/install.ps1" = {')
+[void]$sb.AppendLine($bnscInstallScript)
+[void]$sb.AppendLine('  }')
+
+[void]$sb.AppendLine('  "app/lockxls_install/install.ps1" = {')
+[void]$sb.AppendLine($lockxlsInstallScript)
+[void]$sb.AppendLine('  }')
+
+[void]$sb.AppendLine('  "app/autocad_install/install.ps1" = {')
+[void]$sb.AppendLine($autocadInstallScript)
+[void]$sb.AppendLine('  }')
+
+[void]$sb.AppendLine('  "app/netfx35_install/install.ps1" = {')
+[void]$sb.AppendLine($netfx35InstallScript)
+[void]$sb.AppendLine('  }')
+
+[void]$sb.AppendLine('}')
+[void]$sb.AppendLine("")
+
+# Inlined Install-App function
+[void]$sb.AppendLine(@'
+function Install-App
+{
+  [CmdletBinding()]
+  param (
+    [String]$Name,
+    [String]$PackageName,
+    [String]$PackageManager,
+    [String]$CustomScript,
+    [String[]]$InstallArgs
+  )
+
+  if ($CustomScript)
+  {
+    Write-Host "Running custom installer for $Name..." -ForegroundColor Cyan
+    $normalizedKey = $CustomScript.Replace('\', '/')
+    if ($script:EmbeddedCustomScripts.ContainsKey($normalizedKey))
+    {
+      & $script:EmbeddedCustomScripts[$normalizedKey]
+    }
+    elseif (Test-Path $CustomScript)
+    {
+      $scriptDir = Split-Path $CustomScript -Parent
+      Push-Location $scriptDir
+      try { . $CustomScript } finally { Pop-Location }
+    }
+    else
+    {
+      throw "Custom script not found: $CustomScript"
+    }
+  }
+  else
+  {
+    $Command = @("install", "-e", "--id", $PackageName,
+                 "--accept-package-agreements", "--accept-source-agreements", "-h")
+    
+    if ($InstallArgs -and $InstallArgs.Count -gt 0)
+    {
+      $Command += $InstallArgs
+    }
+    
+    Write-Host "Running: $PackageManager $($Command -join ' ')"
+    & $PackageManager @Command
+
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0)
+    {
+      throw "'$Name' installer exited with code $LASTEXITCODE."
+    }
+  }
+
+  Write-Host "Successfully installed: $Name" -ForegroundColor Green
+}
+'@)
+[void]$sb.AppendLine("")
+
+# Embed TUI Components
+[void]$sb.AppendLine('# --- TUI COMPONENTS ---')
+[void]$sb.AppendLine($tuiUtils)
+[void]$sb.AppendLine($tuiApp)
+[void]$sb.AppendLine($tuiPrinter)
+[void]$sb.AppendLine($tuiInfo)
+[void]$sb.AppendLine("")
+
+# Embed TUI Main Coordinator
+[void]$sb.AppendLine('# --- TUI COORDINATOR ---')
+[void]$sb.AppendLine(@'
+$_apps = $script:Embedded_AppsJson | ConvertFrom-Json
 $CommonApps = foreach ($app in ($_apps | Where-Object { -not $_.disabled })) {
   $customScript = ""
   if ($app.customScript) {
-    $customScript = Join-Path $PSScriptRoot "../$($app.customScript)"
+    $customScript = $app.customScript
   }
   $deps = @()
   if ($app.dependencies) {
@@ -31,8 +217,7 @@ $CommonApps = foreach ($app in ($_apps | Where-Object { -not $_.disabled })) {
   }
 }
 
-# Parse printer definitions
-$_printers = Get-Content $printersJsonPath -Raw | ConvertFrom-Json
+$_printers = $script:Embedded_PrintersJson | ConvertFrom-Json
 $Printers = foreach ($printer in $_printers) {
   $dup = if ($printer.duplex) { $printer.duplex } elseif ($printer.duplexMode) { $printer.duplexMode } else { $null }
   @{
@@ -51,55 +236,23 @@ $Printers = foreach ($printer in $_printers) {
   }
 }
 
-# Load department profiles
-$script:Departments = Get-Content $departmentsJsonPath -Raw | ConvertFrom-Json
+$script:Departments = $script:Embedded_DepartmentsJson | ConvertFrom-Json
 
-# Load sub-components
-. (Join-Path $PSScriptRoot "components/utils.ps1")
-. (Join-Path $PSScriptRoot "app/app_ui.ps1")
-. (Join-Path $PSScriptRoot "printer/printer_ui.ps1")
-. (Join-Path $PSScriptRoot "information/info_ui.ps1")
-
-# Initialize selection states
 $script:selectedApps = @{}
 $script:selectedPrinters = @{}
 $script:currentDepartmentName = ""
 
-# Function to apply department profile
 function Apply-DepartmentProfile ($dept)
 {
-  # Deselect all
-  foreach ($app in $CommonApps)
-  {
-    $script:selectedApps[$app.Id] = $false
-  }
-  foreach ($printer in $Printers)
-  {
-    $script:selectedPrinters[$printer.Id] = $false
-  }
-  
-  # Select profile specifics
-  foreach ($appId in $dept.apps)
-  {
-    $script:selectedApps[$appId] = $true
-  }
-  foreach ($printerId in $dept.printers)
-  {
-    $script:selectedPrinters[$printerId] = $true
-  }
-  
+  foreach ($app in $CommonApps) { $script:selectedApps[$app.Id] = $false }
+  foreach ($printer in $Printers) { $script:selectedPrinters[$printer.Id] = $false }
+  foreach ($appId in $dept.apps) { $script:selectedApps[$appId] = $true }
+  foreach ($printerId in $dept.printers) { $script:selectedPrinters[$printerId] = $true }
   $script:currentDepartmentName = $dept.name
 }
 
-# Initialize all apps and printers as unchecked
-foreach ($app in $CommonApps)
-{
-  $script:selectedApps[$app.Id] = $false
-}
-foreach ($printer in $Printers)
-{
-  $script:selectedPrinters[$printer.Id] = $false
-}
+foreach ($app in $CommonApps) { $script:selectedApps[$app.Id] = $false }
+foreach ($printer in $Printers) { $script:selectedPrinters[$printer.Id] = $false }
 $script:currentDepartmentName = "None"
 
 function Show-DepartmentMenu
@@ -169,11 +322,9 @@ function Start-Deployment
     return
   }
 
-  # --- Resolve dependencies: auto-add missing deps and reorder ---
   $selectedIds = [System.Collections.Generic.HashSet[string]]::new()
   foreach ($app in $appsToInstall) { $selectedIds.Add($app.Id) | Out-Null }
 
-  # Find all missing dependencies and add them
   $depsAdded = @()
   foreach ($app in $appsToInstall)
   {
@@ -187,7 +338,6 @@ function Start-Deployment
     }
   }
 
-  # Rebuild the install list: dependencies first, then the rest in original order
   if ($depsAdded.Count -gt 0)
   {
     $depApps = $CommonApps | Where-Object { $depsAdded -contains $_.Id }
@@ -195,12 +345,10 @@ function Start-Deployment
   }
   else
   {
-    # Even if no deps were missing, reorder so dependencies come before dependents
     $orderedList = [System.Collections.Generic.List[hashtable]]::new()
     $addedIds = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($app in $appsToInstall)
     {
-      # Add any dependencies of this app first (if not already added)
       foreach ($depId in $app.Dependencies)
       {
         if (-not $addedIds.Contains($depId))
@@ -209,7 +357,6 @@ function Start-Deployment
           if ($depApp) { $orderedList.Add($depApp); $addedIds.Add($depId) | Out-Null }
         }
       }
-      # Add this app (if not already added as someone else's dependency)
       if (-not $addedIds.Contains($app.Id))
       {
         $orderedList.Add($app)
@@ -219,7 +366,6 @@ function Start-Deployment
     $appsToInstall = $orderedList.ToArray()
   }
 
-  # --- Confirm screen ---
   Write-Header "CONFIRM DEPLOYMENT"
   Write-Host "  Profile: $($script:currentDepartmentName)" -ForegroundColor Yellow
   Write-Host ""
@@ -252,7 +398,6 @@ function Start-Deployment
     return
   }
 
-  # --- Track results ---
   $appResults     = [System.Collections.Generic.List[hashtable]]::new()
   $printerResults = [System.Collections.Generic.List[hashtable]]::new()
 
@@ -260,7 +405,6 @@ function Start-Deployment
   Write-Header "DEPLOYMENT IN PROGRESS"
   Write-Host ""
 
-  # Install Applications
   if ($appsToInstall.Count -gt 0)
   {
     Write-Host "  [*] Installing applications..." -ForegroundColor Cyan
@@ -285,7 +429,6 @@ function Start-Deployment
     }
   }
 
-  # Install Printers
   if ($printersToInstall.Count -gt 0)
   {
     Write-Host ""
@@ -315,7 +458,6 @@ function Start-Deployment
     }
   }
 
-  # --- Summary Report ---
   Write-Host ""
   Write-Header "DEPLOYMENT SUMMARY"
   Write-Host "  Profile : $($script:currentDepartmentName)" -ForegroundColor Yellow
@@ -376,7 +518,6 @@ function Show-MainMenu
     Write-Header "SZC AUTOMATED DEPLOYMENT TOOL"
     Write-Host " Active Profile: $($script:currentDepartmentName)" -ForegroundColor Yellow
     
-    # Show active count summaries
     $appCount = ($script:selectedApps.Values | Where-Object { $_ }).Count
     $printerCount = ($script:selectedPrinters.Values | Where-Object { $_ }).Count
     Write-Host " Selected: $appCount/$($CommonApps.Count) Apps, $printerCount/$($Printers.Count) Printers"
@@ -394,21 +535,11 @@ function Show-MainMenu
     
     switch ($choice)
     {
-      "1"
-      { Show-DepartmentMenu 
-      }
-      "2"
-      { Show-AppSelectionMenu 
-      }
-      "3"
-      { Show-PrinterSelectionMenu 
-      }
-      "4"
-      { Get-SystemInformation 
-      }
-      "5"
-      { Start-Deployment 
-      }
+      "1" { Show-DepartmentMenu }
+      "2" { Show-AppSelectionMenu }
+      "3" { Show-PrinterSelectionMenu }
+      "4" { Get-SystemInformation }
+      "5" { Start-Deployment }
       "6"
       { 
         Write-Host "Exiting. Goodbye!" -ForegroundColor Yellow
@@ -427,3 +558,19 @@ function Start-Tui
 {
   Show-MainMenu
 }
+'@)
+[void]$sb.AppendLine("")
+
+# Launch entrypoint
+[void]$sb.AppendLine("# --- LAUNCH DEPLOYMENT ---")
+[void]$sb.AppendLine("Start-Tui")
+[void]$sb.AppendLine('Write-Host ""')
+[void]$sb.AppendLine('Write-Host "Session ended. Press Enter to close this window..." -ForegroundColor DarkGray')
+[void]$sb.AppendLine('Read-Host | Out-Null')
+
+[System.IO.File]::WriteAllText($outputFile, $sb.ToString(), [System.Text.Encoding]::UTF8)
+
+$sizeKb = [math]::Round((Get-Item $outputFile).Length / 1KB, 2)
+Write-Host "Bundled script created successfully!" -ForegroundColor Green
+Write-Host "  Path: $outputFile" -ForegroundColor Yellow
+Write-Host "  Size: $sizeKb KB" -ForegroundColor Yellow

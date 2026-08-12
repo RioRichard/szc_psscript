@@ -31,7 +31,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `information/info_ui.ps1`: System information collection interface.
     *   `config/`: Directory containing configuration files:
         *   `apps.json`: Application definitions (id, name, package, packageManager, customScript).
-        *   `printers.json`: Printer definitions (id, name, url, port, driver, urlDriver).
+        *   `printers.json`: Printer definitions (id, name, url, portType, port, lprQueue, driver, driverUrl, driverInstallArgs).
         *   `departments.json`: Department profiles — each references apps and printers by `id`.
     *   `app/`: Directory containing application installation logic:
         *   `install_app.ps1`: Generic helper function (`Install-App`) to install applications via `winget` or custom setup scripts. Dot-sources `download_helper.ps1`.
@@ -45,8 +45,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
         *   `autocad_install/`: Files to deploy AutoCAD LT:
             *   `install.ps1`: Custom script that searches multiple locations for the Autodesk deployment package (`Setup.exe`): local cache (`C:\ProgramData\SZC\InstallCache\autocad\`), USB/removable drives (root, `\autocad`, `\AutoCAD LT`, `\SZC\autocad`). If found on external media, copies to local cache first. Runs `Setup.exe -q` for silent install. If not found, displays step-by-step instructions for creating a Custom Install deployment from `manage.autodesk.com` and offers to open the portal in a browser. Uses Named User licensing (user signs in after install).
     *   `printer/`: Directory containing printer installation logic:
-        *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) to add printer ports, download/install drivers, and configure printers.
-        *   `printers_dn.ps1`: Defines local/network printer profiles and triggers installation.
+        *   `install_printer.ps1`: Core function (`Install-LocalPrinter`) handling three installation modes (IPP, TCP/IP, LPR). Dot-sources `download_helper.ps1` for `Start-MultiDownload`.
 
 ---
 
@@ -90,17 +89,48 @@ The `Install-App` function handles generic installations.
 *   **Status:** ✅ Working — extracts with 7-Zip CLI and runs `.msi` directly with `/passive EULA=1 PRIVACYPOLICY=1 KSN=0` for an unattended installation with progress bar.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
-*   **Automatic discovery:** If no port/driver is specified, it uses WS-Discovery/TCP-IP discovery to install printers automatically.
-*   **Manual Port & Driver setup:** If `$Port` and `$Driver` are specified:
-    1.  Checks if the port exists; creates a standard TCP/IP port if missing.
-    2.  Checks if the printer driver is installed; if missing and `$UrlDriver` is provided, downloads and runs the driver installer.
-    3.  Adds the local printer with the specified port and driver.
-*   **Gotchas:**
-    *   Ensure parameter binding matches: use `-UrlDriver` when calling `Install-LocalPrinter` (do not confuse with `$DriverUrl`).
-*   **Status:** 🚧 Implementation deferred. Printer information (IPs, drivers, models) not yet collected. The TUI option is marked **Coming Soon**.
+*   **Three installation modes**, driven entirely by `printers.json` config:
+    1.  **IPP mode** (no `portType`/`driver` in config): Uses `Add-Printer -DriverName "Microsoft IPP Class Driver" -PortName "http://<IP>/ipp/print"`. Auto-falls back to `Microsoft PCL6 Class Driver` with a Standard TCP/IP port (RAW 9100) if the IPP driver is missing (common on older Windows 10). The IPP endpoint path is configurable via the optional `ippPath` field (default: `/ipp/print`, Ricoh uses `/printer`). Best for HP and Ricoh printers.
+    2.  **TCP/IP + driver mode** (`portType: "tcpip"`): Creates a standard TCP/IP port via `Add-PrinterPort -PrinterHostAddress`, downloads and installs the driver, then adds the printer with the specific driver.
+    3.  **LPR + driver mode** (`portType: "lpr"`): Creates an LPR port via `Add-PrinterPort -LprHostAddress -LprQueueName -LprByteCounting`, downloads and installs the driver, then adds the printer.
+*   **Driver download & caching:** Uses `Start-MultiDownload` from `download_helper.ps1` to cache driver installers in `C:\ProgramData\SZC\InstallCache\Drivers\`. Before downloading, `Install-LocalPrinter` checks both: (1) if the driver is already installed in Windows Spooler (`Get-PrinterDriver` exact & wildcard matching), and (2) if the installer package already exists in the local disk cache (`Test-Path $DriverPath`). If installed in Windows, both download and driver setup are skipped; if cached on disk, download is skipped.
+*   **Configurable silent install args:** Each printer's driver installer flags are specified via `driverInstallArgs` in `printers.json` (e.g., `["/S", "/norestart"]`).
+*   **Error propagation:** Like `Install-App`, the function does NOT catch exceptions -- it lets them bubble up to the TUI's `Start-Deployment` try/catch for proper FAILED reporting.
+*   **Signature:**
+    ```powershell
+    Install-LocalPrinter -Name <String> -Url <String> [-Port <String>] [-PortType <String>] [-LprQueue <String>] [-Driver <String>] [-DriverUrl <String>] [-DriverInstallArgs <String[]>] [-IppPath <String>] [-PaperSize <String>] [-Duplex <String>]
+    ```
+*   **`printers.json` schema:**
+    ```json
+    {
+      "id": "brother_t4500",
+      "name": "Brother T4500DW BH",
+      "url": "192.168.3.20",
+      "portType": "tcpip",
+      "port": "IP_192.168.3.20",
+      "driver": "Brother MFC-T4500DW",
+      "driverUrl": "https://...",
+      "driverInstallArgs": ["/S", "/norestart"],
+      "paperSize": "A4",
+      "duplex": "TwoSidedLongEdge"
+    }
+    ```
+    IPP mode example (Ricoh with custom path & paper size):
+    ```json
+    {
+      "id": "ricoh_mp3555",
+      "name": "Ricoh MP 3555 BH (Photocopy)",
+      "url": "192.168.3.23",
+      "ippPath": "/printer",
+      "paperSize": "A4"
+    }
+    ```
+    Fields `portType`, `port`, `lprQueue`, `driver`, `driverUrl`, `driverInstallArgs`, `ippPath`, `paperSize`, `duplex` (or `duplexMode`) are all optional. `paperSize` defaults to `"A4"` if omitted. `Set-PrintConfiguration` is called dynamically after adding the printer to apply paper size and duplex settings.
+*   **Status:** ✅ Implemented (on `feature/printer-install` branch). Driver URLs and Windows driver names are placeholders pending testing.
 
 ### 5. TUI (`src/tui/`)
 *   Entry point is `Start-Tui`, called from `main.ps1` via `src/tui/tui.ps1`.
+*   **Startup state:** All apps and printers start **unchecked** (no department profile auto-applied). The main menu shows `Active Profile: None` with `0/X Apps, 0/X Printers`. The user must explicitly select a department profile or manually check items.
 *   **Department Profiles:** Loaded from `config/departments.json` at startup. Each department has a preset list of `Apps` and `Printers` referenced by `id`. The JSON ids are resolved to display names using `$CommonApps` and `$Printers` at load time. Selecting a department auto-checks the relevant items.
 *   **Navigation rule:** All menus use **numbers only** for input. Letter-based shortcuts (A/N/Q/C) are not used anywhere. Extra options (Select All, Deselect All, Back) are appended as numbered items after the list.
 *   **Flow:**
@@ -119,7 +149,7 @@ The `Install-App` function handles generic installations.
 The automation suite is organized into 4 distinct phases:
 
 1.  **Install Application Phase:** *(Active)* Automating the installation of standard applications via Winget or custom silent setup scripts (e.g., Microsoft Office, Kaspersky, Chrome, UniKey). Core installer bugs fixed — pending user verification.
-2.  **Install Printer Phase:** *(Deferred)* Waiting on printer hardware information (IPs, models, drivers). TUI menu option shows "Coming Soon".
+2.  **Install Printer Phase:** *(Implemented)* Three-mode printer installer (IPP / TCP+Driver / LPR+Driver). Config-driven via `printers.json`. Integrated into `Start-Deployment` with per-printer try/catch and summary report. Driver URLs are placeholders pending user-provided URLs and testing.
 3.  **Collect Information Phase:** *(Implemented)* Gathers OS, CPU, RAM, disk, IP, MAC info and saves a report to `C:\ProgramData\SZC\SystemInfo_<ComputerName>.txt`.
 4.  **TUI (Text User Interface) Phase:** *(Active)* Interactive CLI menu driven by user department profiles. Allows selecting apps/printers per department, manual overrides, system information collection, and deployment.
 
@@ -129,7 +159,7 @@ The automation suite is organized into 4 distinct phases:
 
 *   **Always update `AGENTS.md`** at the end of every session. This is the memory for the next agent.
 *   **Number-only navigation:** All TUI menus use numbers exclusively. Do NOT introduce letter-based shortcuts (A, N, Q, C, etc.) into any menu. Extra actions (Select All, Back, etc.) are always appended as the next numbered item after the list.
-*   **`$PSScriptRoot` vs dot-source:** `$PSScriptRoot` resolves to the **caller's** directory when a script is dot-sourced. Custom install scripts (`office_install/install.ps1`, `kes_install/install.ps1`) must use `Split-Path $MyInvocation.MyCommand.Path -Parent` to reliably find their own directory.
+*   **`$PSScriptRoot` vs dot-source:** `$PSScriptRoot` resolves to the **caller's** directory when a script is dot-sourced. ALL custom install scripts (`office_install/install.ps1`, `kes_install/install.ps1`, `bnsc_install/install.ps1`, `lockxls_install/install.ps1`) must use `Split-Path $MyInvocation.MyCommand.Path -Parent` to reliably find their own directory.
 *   **Custom scripts are dot-sourced, not subprocess:** `Install-App` dot-sources custom scripts (`. $CustomScript`) directly in the current process. This means `throw` inside a custom script propagates straight up to the TUI's `try/catch`, and all `Write-Host` output appears in the TUI console. Do NOT change this back to spawning a child `powershell.exe` — that approach hid errors and output.
 *   **String Interpolation in Catch Blocks:** In error handling, ensure you use subexpression syntax `$($_...)` instead of `${$_...}` to interpolate properties of the current error object.
     *   *Correct:* `Write-Error "Reason: $($_.Exception.Message)"`
@@ -140,6 +170,8 @@ The automation suite is organized into 4 distinct phases:
 *   **Do NOT use the fwlink URL for ODT:** `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to an HTML Download Center page, not a binary. Always use the Office CDN direct URL `https://officecdn.microsoft.com/pr/wsus/setup.exe`.
 *   **No Unicode special characters in .ps1 files:** Never use em-dash, en-dash, curly quotes, or any non-ASCII character in PowerShell scripts. They cause parse errors depending on system encoding. Use only plain ASCII: `--` instead of em-dash, straight quotes `"` instead of curly quotes, etc.
 *   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside VirtualBox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
+*   **Zero-config network printers require port creation:** Standard PowerShell `Add-Printer` requires `-PortName` to exist prior to adding a printer. Pass `-PortName "IP_<Url>"` after creating it with `Add-PrinterPort -Name "IP_<Url>" -PrinterHostAddress <Url>` and bind to `Microsoft PCL6 Class Driver` or `Microsoft IPP Class Driver`.
+*   **Ricoh IPP path is `/printer`:** Ricoh printers use `/printer` as their IPP endpoint, not the standard `/ipp/print`. This is configured via the `ippPath` field in `printers.json`.
 
 ---
 
@@ -154,10 +186,22 @@ The automation suite is organized into 4 distinct phases:
 | `$Custom` array type check | ✅ Fixed | Replaced `[String]::IsNullOrWhiteSpace($Custom)` (broke on arrays) with `$Custom.Count -gt 0`; typed param as `[String[]]`; splatted with `@Command` |
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
-| Printer implementation | 🚧 Pending | Waiting on printer hardware info (IPs, models, drivers). Temporarily removed from Start-Deployment script entirely as it's on hold. |
+| Printer implementation | ✅ Implemented | Three-mode `Install-LocalPrinter` (IPP/TCP/LPR), integrated into `Start-Deployment`, config-driven via `printers.json`. Configured real driver URLs for Brother T4500DW (`Brother MFC-T4500DW Printer`) and Epson L1800 (`EPSON L1800 Series`). Automated 7-Zip extraction + `pnputil.exe /add-driver` INF staging for silent unattended installation. 7-Zip is now a hard requirement for driver extraction -- throws a clear error if missing. `feat-install-app` merged into `feature/printer-install`. |
+| Zero-config printer fix (HP 4003 / Ricoh) | 🧪 Pending Test | Fixed "printer port not found" error by explicitly creating Standard TCP/IP port (`IP_<Url>`) with `Add-PrinterPort` before calling `Add-Printer` with built-in Windows class driver (prioritizes `Microsoft IPP Class Driver`, falls back to `Microsoft PCL6 Class Driver`). |
+| LPR port parameter set fix (Epson L1800) | 🧪 Pending Test | Fixed "Parameter set cannot be resolved using the specified named parameters" error in LPR mode. Added try/catch in `Install-LocalPrinter` so if optional LPR Port Monitor feature is missing on Windows 10/11, it automatically falls back to creating a Standard TCP/IP port (`Add-PrinterPort -PrinterHostAddress`). |
+| Printer driver caching & detection fix | 🧪 Pending Test | Fixed re-downloading issue. `Install-LocalPrinter` now checks if driver is already installed in Windows (`Get-PrinterDriver` exact & wildcard) AND checks if installer file is already cached in `C:\ProgramData\SZC\InstallCache\Drivers\`. Skips download if cached, skips download & install if already in Windows Spooler. |
+| Printer PaperSize & Duplex config | 🧪 Pending Test | Added optional `paperSize` (defaults to `"A4"`) and `duplex` (or `duplexMode`) fields to `printers.json`. `Install-LocalPrinter` applies them using `Set-PrintConfiguration`. |
+| TUI starts unchecked | 🧪 Pending Test | Removed auto-apply of "Ky Thuat" department profile on startup. All apps and printers now start unchecked. Main menu shows `Active Profile: None`. User will implement default-checked profiles later. |
 | Creative & Office App Expansion | ✅ Mostly Working | User verified most apps install correctly on VirtualBox. AutoCAD LT requires pre-staged deployment package (by design). |
 | ZWCAD Removal | ❌ Removed | Removed `zwcad` entry from `apps.json` per user request. |
 | AutoCAD LT installer rewrite | ✅ Done | Rewrote `autocad_install/install.ps1` to search multiple locations (local cache + USB/removable drives), copy to local cache if found externally, show clear prep instructions with Autodesk portal link, and note Named User licensing. AutoCAD LT is commercial software with no public download URL -- requires a one-time Custom Install deployment package from `manage.autodesk.com`. |
 | Google Drive Downloader | ✅ Added | Added `Start-GoogleDriveDownload` to `download_helper.ps1`. Automatically parses File ID from any GDrive URL format, handles cookies/sessions, bypasses virus scan confirmation tokens for large files, and validates binary outputs. |
-| BNSC Installer | ✅ Configured | Added Google Drive URL `15PJp17mN5XNhYf-H8yDoBeFUURu2VMmG` to `bnsc_install/install.ps1`. Configured dependency chain (.NET 3.5 -> VSTOR -> Office -> BNSC -> LockXLS). Verified installer structure (180MB ClickOnce / VSSetup bootstrapper containing VSTOR + BNSC). Added automatic Antivirus bypass and `C:\SecureDongle.dll` File Symlink (`C:\SecureDongle.dll` ➔ `C:\ProgramData\SZC\SecureDongle.dll`) with Full Control ACLs so standard non-admin local users can write `C:\SecureDongle.dll` without admin privilege errors. |
+| BNSC Installer | ✅ Configured | Added Google Drive URL `15PJp17mN5XNhYf-H8yDoBeFUURu2VMmG` to `bnsc_install/install.ps1`. Configured dependency chain (.NET 3.5 -> VSTOR -> Office -> BNSC -> LockXLS). Verified installer structure (180MB ClickOnce / VSSetup bootstrapper containing VSTOR + BNSC). Added automatic Antivirus bypass and `C:\SecureDongle.dll` File Symlink (`C:\SecureDongle.dll` -> `C:\ProgramData\SZC\SecureDongle.dll`) with Full Control ACLs so standard non-admin local users can write `C:\SecureDongle.dll` without admin privilege errors. |
 | LockXLS Installer | ✅ Configured | Analyzed Google Drive file `1KdQyb6YEsB3LtDEK9cHNUfWdoULKobke`. File is a Zip archive containing `lockxlsrtm64.msi`. Updated `lockxls_install/install.ps1` to download from GDrive, extract ZIP, and execute `msiexec.exe /i lockxlsrtm64.msi /passive /norestart`. Added automatic Antivirus bypass. |
+| `$PSScriptRoot` bug in BNSC/LockXLS | ✅ Fixed | `bnsc_install/install.ps1` and `lockxls_install/install.ps1` used `$PSScriptRoot` to locate `download_helper.ps1`, which resolves to the caller's directory when dot-sourced. Fixed to use `Split-Path $MyInvocation.MyCommand.Path -Parent`. |
+| 7-Zip required for printer drivers | ✅ Fixed | `Install-LocalPrinter` now throws a clear error if 7-Zip is not found and the driver package needs extraction (`.exe`/`.zip`/`.7z`). Previously it silently fell back to running the driver `.exe` directly, which could launch an interactive GUI. |
+| Branch divergence | ✅ Fixed | Merged `feat-install-app` (BNSC, LockXLS, .NET 3.5, Google Drive downloader, apps.json updates) into `feature/printer-install`. All work is now consolidated on `feature/printer-install`. |
+| Script Suite Bundler (`pack.ps1`) | ✅ Implemented | Automated build script `pack.ps1` bundles all `.ps1` modules, TUI components, JSON configs (`apps.json`, `printers.json`, `departments.json`), XML assets (`OfficeCustom.xml`), and custom installer scriptblocks into a single standalone, zero-dependency script: `dist/szc_setup_bundled.ps1` (~81 KB). Validated clean syntax with 0 AST parse errors. Created `.gitignore` to ignore the `dist/` build directory. |
+
+
+
