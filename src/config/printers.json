@@ -37,7 +37,7 @@
   {
     "id": "epson_l1800_dn",
     "name": "EPSON L1800 DN",
-    "url": "192.168.3.21",
+    "url": "192.168.3.24",
     "portType": "lpr",
     "port": "EPSON_L1800_DN_LPR",
     "lprQueue": "L1800",
