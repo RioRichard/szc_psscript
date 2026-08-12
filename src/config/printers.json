@@ -2,7 +2,9 @@
   {
     "id": "hp4003",
     "name": "HP 4003 DN",
-    "url": "192.168.3.21"
+    "url": "192.168.3.21",
+    "paperSize": "A4",
+    "duplex": "TwoSidedLongEdge"
   },
   {
     "id": "brother_t4500",
@@ -21,7 +23,8 @@
     "id": "ricoh_mp3555",
     "name": "Ricoh MP 3555 BH (Photocopy)",
     "url": "192.168.3.23",
-    "ippPath": "/printer"
+    "ippPath": "/printer",
+    "paperSize": "A4"
   },
   {
     "id": "epson_l1800",

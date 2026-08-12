@@ -98,7 +98,7 @@ The `Install-App` function handles generic installations.
 *   **Error propagation:** Like `Install-App`, the function does NOT catch exceptions -- it lets them bubble up to the TUI's `Start-Deployment` try/catch for proper FAILED reporting.
 *   **Signature:**
     ```powershell
-    Install-LocalPrinter -Name <String> -Url <String> [-Port <String>] [-PortType <String>] [-LprQueue <String>] [-Driver <String>] [-DriverUrl <String>] [-DriverInstallArgs <String[]>] [-IppPath <String>]
+    Install-LocalPrinter -Name <String> -Url <String> [-Port <String>] [-PortType <String>] [-LprQueue <String>] [-Driver <String>] [-DriverUrl <String>] [-DriverInstallArgs <String[]>] [-IppPath <String>] [-PaperSize <String>] [-Duplex <String>]
     ```
 *   **`printers.json` schema:**
     ```json
@@ -110,19 +110,22 @@ The `Install-App` function handles generic installations.
       "port": "IP_192.168.3.20",
       "driver": "Brother MFC-T4500DW",
       "driverUrl": "https://...",
-      "driverInstallArgs": ["/S", "/norestart"]
+      "driverInstallArgs": ["/S", "/norestart"],
+      "paperSize": "A4",
+      "duplex": "TwoSidedLongEdge"
     }
     ```
-    IPP mode example (Ricoh with custom path):
+    IPP mode example (Ricoh with custom path & paper size):
     ```json
     {
       "id": "ricoh_mp3555",
       "name": "Ricoh MP 3555 BH (Photocopy)",
       "url": "192.168.3.23",
-      "ippPath": "/printer"
+      "ippPath": "/printer",
+      "paperSize": "A4"
     }
     ```
-    Fields `portType`, `port`, `lprQueue`, `driver`, `driverUrl`, `driverInstallArgs`, `ippPath` are all optional. If none are present (or only `ippPath`), IPP mode is used. `ippPath` defaults to `/ipp/print` if omitted; Ricoh printers use `/printer`.
+    Fields `portType`, `port`, `lprQueue`, `driver`, `driverUrl`, `driverInstallArgs`, `ippPath`, `paperSize`, `duplex` (or `duplexMode`) are all optional. `paperSize` defaults to `"A4"` if omitted. `Set-PrintConfiguration` is called dynamically after adding the printer to apply paper size and duplex settings.
 *   **Status:** ✅ Implemented (on `feature/printer-install` branch). Driver URLs and Windows driver names are placeholders pending testing.
 
 ### 5. TUI (`src/tui/`)
@@ -184,7 +187,8 @@ The automation suite is organized into 4 distinct phases:
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
 | Printer implementation | ✅ Implemented | Three-mode `Install-LocalPrinter` (IPP/TCP/LPR), integrated into `Start-Deployment`, config-driven via `printers.json`. Configured real driver URLs for Brother T4500DW (`Brother MFC-T4500DW Printer`) and Epson L1800 (`EPSON L1800 Series`). Automated 7-Zip extraction + `pnputil.exe /add-driver` INF staging for silent unattended installation. 7-Zip is now a hard requirement for driver extraction -- throws a clear error if missing. `feat-install-app` merged into `feature/printer-install`. |
-| Zero-config printer fix (HP 4003 / Ricoh) | 🧪 Pending Test | Fixed "printer port not found" error by explicitly creating Standard TCP/IP port (`IP_<Url>`) with `Add-PrinterPort` before calling `Add-Printer` with built-in Windows class driver (`Microsoft PCL6 Class Driver` / `Microsoft IPP Class Driver`). |
+| Zero-config printer fix (HP 4003 / Ricoh) | 🧪 Pending Test | Fixed "printer port not found" error by explicitly creating Standard TCP/IP port (`IP_<Url>`) with `Add-PrinterPort` before calling `Add-Printer` with built-in Windows class driver (prioritizes `Microsoft IPP Class Driver`, falls back to `Microsoft PCL6 Class Driver`). |
+| Printer PaperSize & Duplex config | 🧪 Pending Test | Added optional `paperSize` (defaults to `"A4"`) and `duplex` (or `duplexMode`) fields to `printers.json`. `Install-LocalPrinter` applies them using `Set-PrintConfiguration`. |
 | TUI starts unchecked | 🧪 Pending Test | Removed auto-apply of "Ky Thuat" department profile on startup. All apps and printers now start unchecked. Main menu shows `Active Profile: None`. User will implement default-checked profiles later. |
 | Creative & Office App Expansion | ✅ Mostly Working | User verified most apps install correctly on VirtualBox. AutoCAD LT requires pre-staged deployment package (by design). |
 | ZWCAD Removal | ❌ Removed | Removed `zwcad` entry from `apps.json` per user request. |

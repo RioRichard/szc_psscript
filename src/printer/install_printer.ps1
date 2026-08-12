@@ -27,7 +27,9 @@ function Install-LocalPrinter {
         [string]$Driver,
         [string]$DriverUrl,
         [string[]]$DriverInstallArgs,
-        [string]$IppPath
+        [string]$IppPath,
+        [string]$PaperSize,
+        [string]$Duplex
     )
 
     $existingPrinter = Get-Printer -Name $Name -ErrorAction SilentlyContinue
@@ -140,8 +142,8 @@ function Install-LocalPrinter {
             Add-PrinterPort -Name $portName -PrinterHostAddress $Url -ErrorAction Stop
         }
 
-        # Select best built-in Windows driver
-        $inboxDrivers = @("Microsoft PCL6 Class Driver", "Microsoft IPP Class Driver", "Generic / Text Only")
+        # Select best built-in Windows driver (prefer IPP Class Driver on modern systems, fall back to PCL6)
+        $inboxDrivers = @("Microsoft IPP Class Driver", "Microsoft PCL6 Class Driver", "Generic / Text Only")
         $selectedDriver = $null
         foreach ($drv in $inboxDrivers) {
             $checkDrv = Get-PrinterDriver -Name $drv -ErrorAction SilentlyContinue
@@ -160,5 +162,31 @@ function Install-LocalPrinter {
         }
 
         Add-Printer -Name $Name -PortName $portName -DriverName $selectedDriver -ErrorAction Stop
+    }
+
+    # Default PaperSize to "A4" if omitted, and apply configuration (PaperSize / Duplex)
+    if (-not $PaperSize) {
+        $PaperSize = "A4"
+    }
+
+    $configArgs = @{ PrinterName = $Name; PaperSize = $PaperSize }
+    if ($Duplex) {
+        $normDuplex = switch -Exact ($Duplex.ToLower()) {
+            "longedge"          { "TwoSidedLongEdge" }
+            "shortedge"         { "TwoSidedShortEdge" }
+            "onesided"          { "OneSided" }
+            "twosidedlongedge"  { "TwoSidedLongEdge" }
+            "twosidedshortedge" { "TwoSidedShortEdge" }
+            default             { $Duplex }
+        }
+        $configArgs['DuplexingMode'] = $normDuplex
+    }
+
+    Write-Host "  Applying print configuration for '$Name' (PaperSize: $PaperSize$(if ($Duplex) { ", Duplex: $Duplex" }))..."
+    try {
+        Set-PrintConfiguration @configArgs -ErrorAction Stop
+        Write-Host "  Print configuration applied." -ForegroundColor Green
+    } catch {
+        Write-Host "  Warning: Could not set print configuration ($($_.Exception.Message))" -ForegroundColor Yellow
     }
 }

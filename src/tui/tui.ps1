@@ -34,6 +34,7 @@ $CommonApps = foreach ($app in ($_apps | Where-Object { -not $_.disabled })) {
 # Parse printer definitions
 $_printers = Get-Content $printersJsonPath -Raw | ConvertFrom-Json
 $Printers = foreach ($printer in $_printers) {
+  $dup = if ($printer.duplex) { $printer.duplex } elseif ($printer.duplexMode) { $printer.duplexMode } else { $null }
   @{
     Id                = $printer.id
     Name              = $printer.name
@@ -45,6 +46,8 @@ $Printers = foreach ($printer in $_printers) {
     DriverUrl         = $printer.driverUrl
     DriverInstallArgs = @($printer.driverInstallArgs)
     IppPath           = $printer.ippPath
+    PaperSize         = $printer.paperSize
+    Duplex            = $dup
   }
 }
 
@@ -298,7 +301,7 @@ function Start-Deployment
           -Port $printer.Port -PortType $printer.PortType `
           -LprQueue $printer.LprQueue -Driver $printer.Driver `
           -DriverUrl $printer.DriverUrl -DriverInstallArgs $printer.DriverInstallArgs `
-          -IppPath $printer.IppPath
+          -IppPath $printer.IppPath -PaperSize $printer.PaperSize -Duplex $printer.Duplex
         $result.Status = "OK"
         Write-Host " Done" -ForegroundColor Green
       } catch
