@@ -201,4 +201,6 @@ The automation suite is organized into 4 distinct phases:
 | `$PSScriptRoot` bug in BNSC/LockXLS | ✅ Fixed | `bnsc_install/install.ps1` and `lockxls_install/install.ps1` used `$PSScriptRoot` to locate `download_helper.ps1`, which resolves to the caller's directory when dot-sourced. Fixed to use `Split-Path $MyInvocation.MyCommand.Path -Parent`. |
 | 7-Zip required for printer drivers | ✅ Fixed | `Install-LocalPrinter` now throws a clear error if 7-Zip is not found and the driver package needs extraction (`.exe`/`.zip`/`.7z`). Previously it silently fell back to running the driver `.exe` directly, which could launch an interactive GUI. |
 | Branch divergence | ✅ Fixed | Merged `feat-install-app` (BNSC, LockXLS, .NET 3.5, Google Drive downloader, apps.json updates) into `feature/printer-install`. All work is now consolidated on `feature/printer-install`. |
+| Script Suite Bundler (`pack.ps1`) | ✅ Implemented | Automated build script `pack.ps1` bundles all `.ps1` modules, TUI components, JSON configs (`apps.json`, `printers.json`, `departments.json`), XML assets (`OfficeCustom.xml`), and custom installer scriptblocks into a single standalone, zero-dependency script: `dist/szc_setup_bundled.ps1` (~81 KB). Validated clean syntax with 0 AST parse errors. |
+
 
