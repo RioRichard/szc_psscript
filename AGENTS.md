@@ -90,7 +90,7 @@ The `Install-App` function handles generic installations.
 
 ### 4. Printer Installer (`src/printer/install_printer.ps1`)
 *   **Three installation modes**, driven entirely by `printers.json` config:
-    1.  **IPP mode** (no `portType`/`driver` in config): Uses `Add-Printer -DeviceUrl "http://<IP>/ipp/print"`. No driver download needed -- Windows uses its built-in IPP Class Driver. Best for HP and Ricoh printers.
+    1.  **IPP mode** (no `portType`/`driver` in config): Uses `Add-Printer -DriverName "Microsoft IPP Class Driver" -PortName "http://<IP>/ipp/print"`. Auto-falls back to `Microsoft PCL6 Class Driver` with a Standard TCP/IP port (RAW 9100) if the IPP driver is missing (common on older Windows 10). The IPP endpoint path is configurable via the optional `ippPath` field (default: `/ipp/print`, Ricoh uses `/printer`). Best for HP and Ricoh printers.
     2.  **TCP/IP + driver mode** (`portType: "tcpip"`): Creates a standard TCP/IP port via `Add-PrinterPort -PrinterHostAddress`, downloads and installs the driver, then adds the printer with the specific driver.
     3.  **LPR + driver mode** (`portType: "lpr"`): Creates an LPR port via `Add-PrinterPort -LprHostAddress -LprQueueName -LprByteCounting`, downloads and installs the driver, then adds the printer.
 *   **Driver download:** Uses `Start-MultiDownload` from `download_helper.ps1` (parallel HTTP downloader with progress bars and BITS/WebClient fallbacks). Drivers are cached in `C:\ProgramData\SZC\InstallCache\Drivers\`.
@@ -98,7 +98,7 @@ The `Install-App` function handles generic installations.
 *   **Error propagation:** Like `Install-App`, the function does NOT catch exceptions -- it lets them bubble up to the TUI's `Start-Deployment` try/catch for proper FAILED reporting.
 *   **Signature:**
     ```powershell
-    Install-LocalPrinter -Name <String> -Url <String> [-Port <String>] [-PortType <String>] [-LprQueue <String>] [-Driver <String>] [-DriverUrl <String>] [-DriverInstallArgs <String[]>]
+    Install-LocalPrinter -Name <String> -Url <String> [-Port <String>] [-PortType <String>] [-LprQueue <String>] [-Driver <String>] [-DriverUrl <String>] [-DriverInstallArgs <String[]>] [-IppPath <String>]
     ```
 *   **`printers.json` schema:**
     ```json
@@ -113,11 +113,21 @@ The `Install-App` function handles generic installations.
       "driverInstallArgs": ["/S", "/norestart"]
     }
     ```
-    Fields `portType`, `port`, `lprQueue`, `driver`, `driverUrl`, `driverInstallArgs` are all optional. If none are present, IPP mode is used.
+    IPP mode example (Ricoh with custom path):
+    ```json
+    {
+      "id": "ricoh_mp3555",
+      "name": "Ricoh MP 3555 BH (Photocopy)",
+      "url": "192.168.3.23",
+      "ippPath": "/printer"
+    }
+    ```
+    Fields `portType`, `port`, `lprQueue`, `driver`, `driverUrl`, `driverInstallArgs`, `ippPath` are all optional. If none are present (or only `ippPath`), IPP mode is used. `ippPath` defaults to `/ipp/print` if omitted; Ricoh printers use `/printer`.
 *   **Status:** ✅ Implemented (on `feature/printer-install` branch). Driver URLs and Windows driver names are placeholders pending testing.
 
 ### 5. TUI (`src/tui/`)
 *   Entry point is `Start-Tui`, called from `main.ps1` via `src/tui/tui.ps1`.
+*   **Startup state:** All apps and printers start **unchecked** (no department profile auto-applied). The main menu shows `Active Profile: None` with `0/X Apps, 0/X Printers`. The user must explicitly select a department profile or manually check items.
 *   **Department Profiles:** Loaded from `config/departments.json` at startup. Each department has a preset list of `Apps` and `Printers` referenced by `id`. The JSON ids are resolved to display names using `$CommonApps` and `$Printers` at load time. Selecting a department auto-checks the relevant items.
 *   **Navigation rule:** All menus use **numbers only** for input. Letter-based shortcuts (A/N/Q/C) are not used anywhere. Extra options (Select All, Deselect All, Back) are appended as numbered items after the list.
 *   **Flow:**
@@ -157,6 +167,9 @@ The automation suite is organized into 4 distinct phases:
 *   **Do NOT use the fwlink URL for ODT:** `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to an HTML Download Center page, not a binary. Always use the Office CDN direct URL `https://officecdn.microsoft.com/pr/wsus/setup.exe`.
 *   **No Unicode special characters in .ps1 files:** Never use em-dash, en-dash, curly quotes, or any non-ASCII character in PowerShell scripts. They cause parse errors depending on system encoding. Use only plain ASCII: `--` instead of em-dash, straight quotes `"` instead of curly quotes, etc.
 *   **Testing & Execution Environment:** The target development and runtime environment is a Windows 11 system running inside VirtualBox. Because of this, agents should **NOT** attempt to execute or test the PowerShell scripts in the agent sandbox. The user will test and verify the code manually.
+*   **Development workflow:** Agent codes the changes -> updates AGENTS.md marking items as pending user test -> user tests on VirtualBox -> if OK, agent marks as Tested -> if not, iterate until user confirms.
+*   **Do NOT use `Add-Printer -DeviceUrl` for IPP:** The `-DeviceUrl` parameter uses WSD (Web Services for Devices) protocol, not IPP. It causes "not found WSD" errors on printers that don't advertise via WSD. Always use `Add-Printer -DriverName "Microsoft IPP Class Driver" -PortName "http://IP/path"` for IPP printers.
+*   **Ricoh IPP path is `/printer`:** Ricoh printers use `/printer` as their IPP endpoint, not the standard `/ipp/print`. This is configured via the `ippPath` field in `printers.json`.
 
 ---
 
@@ -172,6 +185,8 @@ The automation suite is organized into 4 distinct phases:
 | Custom scripts run in child `powershell.exe` | ✅ Fixed | Switched from spawning child process to dot-sourcing (`. $CustomScript`) so throws and output propagate correctly |
 | fwlink ODT URL broken | ✅ Fixed | `go.microsoft.com/fwlink/p/?LinkID=626065` redirects to Download Center HTML page, not binary. Replaced with Office CDN direct URL. |
 | Printer implementation | ✅ Implemented | Three-mode `Install-LocalPrinter` (IPP/TCP/LPR), integrated into `Start-Deployment`, config-driven via `printers.json`. Configured real driver URLs for Brother T4500DW (`Brother MFC-T4500DW Printer`) and Epson L1800 (`EPSON L1800 Series`). Automated 7-Zip extraction + `pnputil.exe /add-driver` INF staging for silent unattended installation. 7-Zip is now a hard requirement for driver extraction -- throws a clear error if missing. `feat-install-app` merged into `feature/printer-install`. |
+| IPP printer fix (HP 4003 / Ricoh) | 🧪 Pending Test | Replaced broken `Add-Printer -DeviceUrl` (WSD) with `Add-Printer -DriverName "Microsoft IPP Class Driver" -PortName "http://IP/path"` (actual IPP). Auto-fallback to `Microsoft PCL6 Class Driver` with Standard TCP/IP port if IPP driver not available on older Win10. Added configurable `ippPath` field to `printers.json` (default `/ipp/print`, Ricoh uses `/printer`). Files changed: `install_printer.ps1`, `printers.json`, `tui.ps1`. |
+| TUI starts unchecked | 🧪 Pending Test | Removed auto-apply of "Ky Thuat" department profile on startup. All apps and printers now start unchecked. Main menu shows `Active Profile: None`. User will implement default-checked profiles later. |
 | Creative & Office App Expansion | ✅ Mostly Working | User verified most apps install correctly on VirtualBox. AutoCAD LT requires pre-staged deployment package (by design). |
 | ZWCAD Removal | ❌ Removed | Removed `zwcad` entry from `apps.json` per user request. |
 | AutoCAD LT installer rewrite | ✅ Done | Rewrote `autocad_install/install.ps1` to search multiple locations (local cache + USB/removable drives), copy to local cache if found externally, show clear prep instructions with Autodesk portal link, and note Named User licensing. AutoCAD LT is commercial software with no public download URL -- requires a one-time Custom Install deployment package from `manage.autodesk.com`. |

@@ -4,7 +4,9 @@ Installs a local printer in one of three modes: IPP, TCP/IP, or LPR.
 
 .DESCRIPTION
 Handles 3 printer installation modes:
-1. IPP mode (no Port, no Driver specified): Uses Add-Printer with -DeviceUrl.
+1. IPP mode (no Port, no Driver specified): Uses the Microsoft IPP Class Driver
+   with the printer's IPP URL as the port name. Falls back to Microsoft PCL6
+   Class Driver with a Standard TCP/IP port if IPP driver is not available.
 2. TCP/IP port + driver mode (PortType = 'tcpip'): Creates port with Add-PrinterPort -PrinterHostAddress.
 3. LPR port + driver mode (PortType = 'lpr'): Creates port with Add-PrinterPort -LprHostAddress and -LprQueueName.
 #>
@@ -25,7 +27,8 @@ function Install-LocalPrinter {
         [string]$LprQueue,
         [string]$Driver,
         [string]$DriverUrl,
-        [string[]]$DriverInstallArgs
+        [string[]]$DriverInstallArgs,
+        [string]$IppPath
     )
 
     $existingPrinter = Get-Printer -Name $Name -ErrorAction SilentlyContinue
@@ -131,6 +134,32 @@ function Install-LocalPrinter {
 
         Add-Printer -Name $Name -PortName $Port -DriverName $Driver -ErrorAction Stop
     } else {
-        Add-Printer -Name $Name -DeviceUrl "http://$Url/ipp/print" -ErrorAction Stop
+        # IPP mode: Try Microsoft IPP Class Driver first, fall back to PCL6 Class Driver
+        if (-not $IppPath) { $IppPath = "/ipp/print" }
+        $ippUrl = "http://$Url$IppPath"
+
+        $ippDriverName = "Microsoft IPP Class Driver"
+        $ippDriver = Get-PrinterDriver -Name $ippDriverName -ErrorAction SilentlyContinue
+
+        if ($ippDriver) {
+            Write-Host "  Using $ippDriverName..."
+            Add-Printer -Name $Name -DriverName $ippDriverName -PortName $ippUrl -ErrorAction Stop
+        } else {
+            # Fallback: PCL6 Class Driver with Standard TCP/IP port (RAW 9100)
+            $pclDriverName = "Microsoft PCL6 Class Driver"
+            $pclDriver = Get-PrinterDriver -Name $pclDriverName -ErrorAction SilentlyContinue
+
+            if ($pclDriver) {
+                Write-Host "  IPP Class Driver not found. Falling back to $pclDriverName..." -ForegroundColor Yellow
+                $tcpPortName = "IP_$Url"
+                $existingPort = Get-PrinterPort -Name $tcpPortName -ErrorAction SilentlyContinue
+                if (-not $existingPort) {
+                    Add-PrinterPort -Name $tcpPortName -PrinterHostAddress $Url -ErrorAction Stop
+                }
+                Add-Printer -Name $Name -PortName $tcpPortName -DriverName $pclDriverName -ErrorAction Stop
+            } else {
+                throw "Neither '$ippDriverName' nor '$pclDriverName' is available on this system. Please run Windows Update or enable 'Internet Printing Client' in Windows Features, then try again."
+            }
+        }
     }
 }

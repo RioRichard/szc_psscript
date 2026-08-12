@@ -20,7 +20,8 @@
   {
     "id": "ricoh_mp3555",
     "name": "Ricoh MP 3555 BH (Photocopy)",
-    "url": "192.168.3.23"
+    "url": "192.168.3.23",
+    "ippPath": "/printer"
   },
   {
     "id": "epson_l1800",

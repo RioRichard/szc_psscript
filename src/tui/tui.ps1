@@ -44,6 +44,7 @@ $Printers = foreach ($printer in $_printers) {
     Driver            = $printer.driver
     DriverUrl         = $printer.driverUrl
     DriverInstallArgs = @($printer.driverInstallArgs)
+    IppPath           = $printer.ippPath
   }
 }
 
@@ -87,15 +88,16 @@ function Apply-DepartmentProfile ($dept)
   $script:currentDepartmentName = $dept.name
 }
 
-# Apply default profile (Ky Thuat) on startup if exists, otherwise first profile
-$defaultDept = $script:Departments | Where-Object { $_.id -eq "it_tech" -or $_.name -like "*Ky Thuat*" }
-if ($defaultDept)
+# Initialize all apps and printers as unchecked
+foreach ($app in $CommonApps)
 {
-  Apply-DepartmentProfile $defaultDept
-} else
-{
-  Apply-DepartmentProfile $script:Departments[0]
+  $script:selectedApps[$app.Id] = $false
 }
+foreach ($printer in $Printers)
+{
+  $script:selectedPrinters[$printer.Id] = $false
+}
+$script:currentDepartmentName = "None"
 
 function Show-DepartmentMenu
 {
@@ -295,7 +297,8 @@ function Start-Deployment
         Install-LocalPrinter -Name $printer.Name -Url $printer.Url `
           -Port $printer.Port -PortType $printer.PortType `
           -LprQueue $printer.LprQueue -Driver $printer.Driver `
-          -DriverUrl $printer.DriverUrl -DriverInstallArgs $printer.DriverInstallArgs
+          -DriverUrl $printer.DriverUrl -DriverInstallArgs $printer.DriverInstallArgs `
+          -IppPath $printer.IppPath
         $result.Status = "OK"
         Write-Host " Done" -ForegroundColor Green
       } catch
