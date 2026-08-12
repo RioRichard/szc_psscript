@@ -145,7 +145,7 @@ function Install-LocalPrinter {
             $existingPort = Get-PrinterPort -Name $Port -ErrorAction SilentlyContinue
             if (-not $existingPort) {
                 try {
-                    Add-PrinterPort -Name $Port -PrinterHostAddress $Url -LprQueueName $LprQueue -LprByteCounting -ErrorAction Stop
+                    Add-PrinterPort -Name $Port -LprHostAddress $Url -LprQueueName $LprQueue -LprByteCounting -ErrorAction Stop
                 } catch {
                     Write-Host "  LPR port creation unavailable ($($_.Exception.Message)). Falling back to Standard TCP/IP port..." -ForegroundColor Yellow
                     Add-PrinterPort -Name $Port -PrinterHostAddress $Url -ErrorAction Stop
